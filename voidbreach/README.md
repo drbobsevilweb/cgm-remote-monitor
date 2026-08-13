@@ -25,15 +25,39 @@ the automated tests.
 |-----|--------|
 | **WASD** | Move |
 | **Mouse** | Aim (the operator always faces the cursor) |
-| **LMB** | Pulse carbine |
+| **LMB** | Pulse carbine — no ammunition, but it overheats |
 | **RMB** | Underslung frag — lobbed at the cursor |
 | **SPACE** | Combat dash (0.22 s of i-frames) |
-| **R** | Reload |
+| **R** | Vent the barrel |
 | **F** | Operator light |
 
-The objective is on the top left, and the violet pips under it are the
-breach-nodes remaining. Nodes are the source of the pressure: find the violet
-light, push through, destroy it, and the room empties.
+The objective is on the top left, and the violet pips under it are the **brood
+queens** remaining. A queen is the source of the pressure: find the violet light,
+push through, kill her, and the room empties.
+
+### The three things that are not obvious
+
+**The carbine never runs out, and that is not the same as free.** Every round
+heats the barrel. About three seconds of held trigger takes it from cold to the
+redline, and at 100% it vents *itself* — a flat two-second lockout you did not
+choose, with a gas release and a shake. **R** vents it manually, and it costs
+less the earlier you do it: half a second from nearly cold, most of two seconds
+from the redline. The bar is bottom-right. Letting go before you have to is the
+whole skill.
+
+**Shoot the eggs.** A queen does not spawn enemies — she lays clutches, and the
+eggs hatch. Each egg has a bright core that grows as it comes to term, so a room
+tells you what is about to happen to it. An egg takes two rounds. What hatches
+out of it takes considerably more. A frag into a fresh clutch is the strongest
+single action in the game.
+
+**She is armoured at the front.** The mineral hood eats two thirds of anything
+that hits her frontal arc — sparks instead of fluid, and you can hear it. Get
+behind her. Explosives ignore the hood completely, at any angle.
+
+Also: **wall grilles can be shot out.** Five rounds welds one shut, and the
+Chorus has permanently lost a bearing it can flank you from. It is the only
+permanent change you can make to the station.
 
 Useful URLs:
 
@@ -91,22 +115,33 @@ npm run gauntlet    # all of the above, in the order that makes them mean someth
 input path — the same `InputFrame` a keyboard produces — so it is a test of the
 game, not of a parallel code path.
 
+`npm run replay` prints a JSON report. The line that matters is `"pass": true`
+and `"beatsPassed": 15`. Fifteen beats, not twelve: three were added with the
+queens, the eggs and the thermal cycle, and one of them (`overheat_barrel`)
+deliberately tests the game *failing well* — the autopilot fires greedily for its
+first seventy seconds and lets the barrel take the decision away from it, because
+that is what a player does before they have learned the bar.
+
 ### What "passing" currently looks like
 
 ```
-beats            12/12, exit reached at 201 s with 80/140 health
-first threat     11.2 s   (gate: <= 12 s)
-first damage     14.7 s   (gate: 14-40 s)
-peak enemies     15       (gate: >= 10)
-first node dead  23.3 s   (gate: <= 60 s)
-relief ratio     0.00     (gate: <= 0.40)
-draw calls       120      (gate: <= 220)
-triangles        43.6 k   (gate: <= 900 k)
+beats            15/15, exit reached at 194 s with 84/140 health
+first threat     11.6 s   (gate: <= 12 s)
+first damage     14.5 s   (gate: 14-40 s)
+peak enemies     18       (gate: >= 10)
+first queen dead 31.5 s   (gate: <= 90 s)
+relief ratio     0.25     (gate: <= 0.40)
+eggs killed      25       — the second answer, being used
+vents sealed     4        — permanent, player-caused
+forced vents     7        vs 39 manual: the thermal decision is live
+draw calls       130      (gate: <= 220)
+triangles        46.5 k   (gate: <= 900 k)
 ```
 
 Known failures are listed honestly in **TEST_PLAN §6c** — the shader-prewarm
-gate (P7) is failing at 13 compilations, the determinism A/B pair is unrun, and
-the final boss organism is designed but not built.
+gate (P7), the determinism A/B pair, the visual gates on the full state set, the
+final boss organism, and four-player co-op (planned and costed in
+**MULTIPLAYER.md**, not started).
 
 ### A note on headless numbers
 
@@ -127,6 +162,7 @@ limitation rather than a fabricated number.
 | **ARCHITECTURE.md** | Subsystem ownership, the dependency table, the determinism contract, the decision log. Authoritative for *how it is put together*. |
 | **TEST_PLAN.md** | Numbered, measurable gates — including §6b (what the instruments have actually caught) and §6c (what is still failing). |
 | **STUDIO.md** | The live authoring tool. |
+| **MULTIPLAYER.md** | Four-player co-op: why it is not pre-built, what is already right for it, and the 64 couplings that block it. |
 
 ## Layout
 
@@ -138,7 +174,7 @@ src/core/           clock, seeded RNG, events, pools, spatial hash
 src/level/          collision grid, flow-field navigation, the authored sector
 src/environment/    procedural textures, merged geometry, props, grating
 src/renderer/       HDR pipeline, hand-written bloom, AgX tonemap, camera rig
-src/{player,weapons,enemies,director}/   gameplay
+src/{player,weapons,enemies,director}/   gameplay (queens and eggs: enemies/Broods.js)
 src/{lighting,vfx,audio,hud}/            presentation
 src/qa/             profiler, self-play harness, canonical camera states
 tools/              dev server and the whole gauntlet

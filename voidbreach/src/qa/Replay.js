@@ -15,16 +15,19 @@ import { STEP } from '../core/Clock.js';
 export const BEATS = [
   { id: 1, name: 'spawn_assault', deadline: 1 },
   { id: 2, name: 'move_corridor', deadline: 20 },
-  { id: 3, name: 'destroy_first_node', deadline: 75 },
-  { id: 4, name: 'fight_swarm', deadline: 120 },
-  { id: 5, name: 'trigger_explosive', deadline: 150 },
-  { id: 6, name: 'cross_grating', deadline: 170 },
-  { id: 7, name: 'fight_stalker', deadline: 200 },
-  { id: 8, name: 'switch_ability', deadline: 210 },
-  { id: 9, name: 'enter_dark_room', deadline: 235 },
-  { id: 10, name: 'illuminate_enemies', deadline: 245 },
-  { id: 11, name: 'destroy_final_node', deadline: 330 },
-  { id: 12, name: 'reach_exit', deadline: 380 },
+  { id: 3, name: 'kill_egg', deadline: 60 },
+  { id: 4, name: 'overheat_barrel', deadline: 75 },
+  { id: 5, name: 'kill_first_queen', deadline: 90 },
+  { id: 6, name: 'fight_swarm', deadline: 130 },
+  { id: 7, name: 'trigger_explosive', deadline: 160 },
+  { id: 8, name: 'cross_grating', deadline: 180 },
+  { id: 9, name: 'fight_stalker', deadline: 210 },
+  { id: 10, name: 'switch_ability', deadline: 220 },
+  { id: 11, name: 'seal_vent', deadline: 250 },
+  { id: 12, name: 'enter_dark_room', deadline: 260 },
+  { id: 13, name: 'illuminate_enemies', deadline: 270 },
+  { id: 14, name: 'kill_final_queen', deadline: 350 },
+  { id: 15, name: 'reach_exit', deadline: 400 },
 ];
 
 /** Canonical camera states for visual review (TEST_PLAN §5). */
@@ -34,7 +37,8 @@ export const SHOTS = {
   GRATING:      { until: (h) => h.game.player.gratingDistance > 3 },
   DARK_CORRIDOR:{ until: (h) => h.roomId() === 'coolant' && h.time > 4 },
   SWARM:        { until: (h) => (h.game.enemies.aliveNow || 0) >= 12 },
-  NEST:         { until: (h) => h.nestDist() < 13 && h.nestDist() > 5 },
+  QUEEN:        { until: (h) => h.queenDist() < 13 && h.queenDist() > 5 },
+  CLUTCH:       { until: (h) => h.game.broods.eggsAlive >= 5 && h.eggDist() < 9 },
   EXPLOSION:    { until: (h) => h.sinceExplosion >= 0 && h.sinceExplosion < 0.20 },
   ELITE:        { until: (h) => h.game.enemies.countOfKind(KIND.STALKER) > 0 && h.nearestEnemyDist() < 12 },
   BOSS_REVEAL:  { until: (h) => h.roomId() === 'reactor' },
@@ -70,13 +74,22 @@ export class Harness {
     this.fragFired = false;
     this.tankFired = false;
     this.stalkerKilled = false;
+    this.eggKilled = false;
+    this.ventSealed = false;
+    this.overheated = false;
+    this.ventTarget = null;
     this.startX = game.player.x; this.startZ = game.player.z;
     this.stuckTimer = 0;
+    this.escapeTimer = 0;
     this.lastPos = { x: game.player.x, z: game.player.z };
     this.wanderAngle = 0;
     this.unreachable = new Set();
     this.progressAt = 0;
     this.progressMark = '';
+    this.bestObjDist = Infinity;
+    this._lastQueens = game.broods.remaining;
+    this.supplyKey = '';
+    this.supplyNearFor = 0;
     this.forcedExit = false;
 
     const ev = game.events;
@@ -84,15 +97,22 @@ export class Harness {
     ev.on('explosion', () => { this.sinceExplosion = 0; });
     ev.on('enemyDied', (e) => { if (e.kind === KIND.STALKER) this.stalkerKilled = true; });
     ev.on('shot', (e) => { if (e.weapon === 'frag') this.fragFired = true; });
+    ev.on('eggDestroyed', () => { this.eggKilled = true; });
+    ev.on('ventSealed', () => { this.ventSealed = true; });
+    ev.on('vent', (e) => { if (e.stage === 'release' && e.forced) this.overheated = true; });
   }
 
   roomId() {
     const r = this.game.sector.roomAtWorld(this.game.player.x, this.game.player.z);
     return r ? r.id : null;
   }
-  nestDist() {
-    const n = this.game.nests.nearest(this.game.player.x, this.game.player.z);
-    return n ? n.dist : 9999;
+  queenDist() {
+    const q = this.game.broods.nearest(this.game.player.x, this.game.player.z);
+    return q ? q.dist : 9999;
+  }
+  eggDist() {
+    const e = this.game.broods.nearestEgg(this.game.player.x, this.game.player.z);
+    return e ? e.dist : 9999;
   }
   nearestEnemyDist() {
     const e = this.game.enemies, p = this.game.player;
@@ -104,16 +124,27 @@ export class Harness {
   /** The objective the autopilot is currently walking toward. */
   chooseGoal() {
     const g = this.game, p = g.player;
-    // 1. hurt or dry: go and get the thing that fixes it. A player would.
     if (this.forcedExit) return this.objectiveGoal();
+
+    // A supply detour is a DETOUR. It has to be cheap, and it must never pull
+    // the operator off a queen who is already in front of them — an earlier
+    // version of this let a run chain-chase arc cells across two rooms and
+    // park against a bulkhead that only opens when that queen is dead.
+    const near = g.broods.nearest(p.x, p.z);
+    const committed = near && near.dist < 22 && near.queen.woken;
     const wantHeal = p.health01 < 0.62;
-    const wantAmmo = g.weapons.reserve < 170;
-    if (wantHeal || wantAmmo) {
-      let best = null, bd = 30;   // grab what you pass, do not cross the sector
+    const wantArc = g.weapons.charges === 0;
+    const wantCoolant = g.weapons.heat01 > 0.55 && g.weapons.coolBoost <= 0;
+
+    if ((wantHeal && !committed) || ((wantArc || wantCoolant) && !committed)) {
+      // Health is worth walking for; a weapon cell is only worth stepping for.
+      let best = null, bd = wantHeal ? 26 : 13;
       for (const item of g.pickups) {
         if (item.taken) continue;
         if (item.kind === 'medkit' && !wantHeal) continue;
-        if (item.kind === 'ammo' && !wantAmmo) continue;
+        if (item.kind === 'arc' && !wantArc) continue;
+        if (item.kind === 'coolant' && !wantCoolant) continue;
+        if (item.kind === 'armour' && !wantHeal) continue;
         if (item.kind === 'flare') continue;
         if (this.unreachable.has(item.kind + ':' + item.index)) continue;
         const d = Math.hypot(item.x - p.x, item.z - p.z);
@@ -124,11 +155,11 @@ export class Harness {
     return this.objectiveGoal();
   }
 
-  /** The objective, with no detours: a live node, or the exit. */
+  /** The objective, with no detours: a live queen, or the exit. */
   objectiveGoal() {
     const g = this.game, p = g.player;
-    const near = g.nests.nearest(p.x, p.z);
-    if (near) return { x: near.nest.x, z: near.nest.z, kind: 'nest' };
+    const near = g.broods.nearest(p.x, p.z);
+    if (near) return { x: near.queen.x, z: near.queen.z, kind: 'queen' };
     const e = g.sector.exitBox;
     return { x: (e.x0 + e.x1) / 2, z: (e.z0 + e.z1) / 2, kind: 'exit' };
   }
@@ -137,7 +168,7 @@ export class Harness {
     const grid = this.game.sector.grid;
     let cx = Math.floor(goal.x / CELL), cz = Math.floor(goal.z / CELL);
     if (!grid.walkableCell(cx, cz)) {
-      // nests sit on prop/flesh cells; walk out to the nearest open cell
+      // queens sit on prop/flesh cells; walk out to the nearest open cell
       let found = false;
       for (let r = 1; r <= 6 && !found; r++) {
         for (let dz = -r; dz <= r && !found; dz++) {
@@ -155,6 +186,42 @@ export class Harness {
     grid.ignoreLocks = true;
     this.field.build(src, 1);
     grid.ignoreLocks = false;
+  }
+
+  /**
+   * A grille worth welding shut: close enough to hit, quiet enough to spend the
+   * heat on, and not already sealed. Only pursued while there is still a live
+   * queen, because sealing a route after the sector is purged achieves nothing.
+   */
+  /** Straight-line distance to whatever the run is actually trying to reach. */
+  objectiveDistance() {
+    const g = this.game, p = g.player;
+    const goal = this.objectiveGoal();
+    return Math.hypot(goal.x - p.x, goal.z - p.z);
+  }
+
+  chooseVent(p) {
+    const g = this.game;
+    if (g.broods.remaining === 0) return null;
+    if (!g.weapons.ready) return null;
+    // A grille costs about five rounds. The first one is worth taking a slightly
+    // worse moment for, the way a player who has just learned the mechanic would;
+    // after that it is strictly opportunistic.
+    const eager = !this.ventSealed && this.time > 20;
+    if (g.weapons.heat01 > (eager ? 0.78 : 0.5)) return null;
+    if (this.nearestEnemyDist() < (eager ? 5.5 : 9)) return null;
+    let best = null, bd = eager ? 24 : 18;
+    for (const v of g.sector.vents) {
+      if (v.sealed || !v.valid) continue;
+      const d = Math.hypot(v.wx - p.x, v.wz - p.z);
+      if (d > bd || d < 3) continue;
+      // Sight is tested to the OPEN CELL in front of the grille, not to the
+      // grille. A vent cell is solid, so a ray aimed at its centre is stopped by
+      // the vent itself and every vent in the sector reads as "not visible".
+      if (!g.sector.grid.lineOfSight(p.x, p.z, v.sx, v.sz)) continue;
+      bd = d; best = v;
+    }
+    return best;
   }
 
   // ------------------------------------------------------------------ drive
@@ -181,6 +248,23 @@ export class Harness {
     f.reset();
 
     let goal = this.chooseGoal();
+    // A supply we have stood next to for four seconds without picking up is not
+    // a supply we can reach: the field routes to the nearest OPEN cell, which for
+    // an item sitting behind a machine can be two metres outside pickup range.
+    // Without this the run ping-pongs beside a crate for the rest of the session.
+    if (goal.kind === 'supply') {
+      if (goal.key !== this.supplyKey) { this.supplyKey = goal.key; this.supplyNearFor = 0; }
+      else if (Math.hypot(goal.x - p.x, goal.z - p.z) < 6) {
+        this.supplyNearFor += dt;
+        if (this.supplyNearFor > 4) {
+          this.unreachable.add(goal.key);
+          this.supplyNearFor = 0;
+          this.goalCell = -1;
+        }
+      }
+    } else {
+      this.supplyKey = '';
+    }
     this.ensureField(goal);
     // If the field does not reach us, this goal is unreachable from here (a
     // supply crate behind a route we have passed, say). Blacklist it and fall
@@ -191,11 +275,11 @@ export class Harness {
       this.ensureField(goal);
     }
 
-    // --- movement: follow the flow field, but hold position while a nest is
+    // --- movement: follow the flow field, but hold position while a queen is
     // in weapons range so the autopilot actually fights rather than orbiting.
     const out = { x: 0, z: 0 };
     const goalDist = Math.hypot(goal.x - p.x, goal.z - p.z);
-    const engaging = goal.kind === 'nest' && goalDist < 11 &&
+    const engaging = goal.kind === 'queen' && goalDist < 11 &&
       g.sector.grid.lineOfSight(p.x, p.z, goal.x, goal.z);
 
     // Break contact when badly hurt: back away from the nearest threat rather
@@ -215,7 +299,9 @@ export class Harness {
         f.moveZ = (dz / d) * 0.8 + (ok ? out.z * 0.35 : 0);
       }
     } else if (engaging) {
-      // strafe around the nest so spitters and runners cannot settle on us
+      // Strafe around the queen. This is not only anti-spitter movement any
+      // more: her hood eats most of a frontal round, so circling is the actual
+      // answer to her and the autopilot has to be capable of it.
       this.wanderAngle += dt * 1.6;
       f.moveX = Math.cos(this.wanderAngle) * 0.7;
       f.moveZ = Math.sin(this.wanderAngle) * 0.7;
@@ -235,31 +321,73 @@ export class Harness {
       this.wanderAngle += 2.1;
       f.moveX = Math.cos(this.wanderAngle);
       f.moveZ = Math.sin(this.wanderAngle);
-      if (this.stuckTimer > 2.5) { this.stuckTimer = 0; this.goalCell = -1; }
+      // The nudge itself counts as movement, which used to reset the timer and
+      // let a run oscillate against a wall indefinitely. Track how long we have
+      // been ESCAPING, not how long we have been still.
+      this.escapeTimer += dt;
+      if (this.escapeTimer > 2.5) {
+        this.escapeTimer = 0; this.stuckTimer = 0; this.goalCell = -1;
+        if (goal.key) this.unreachable.add(goal.key);
+      }
+    } else if (this.stuckTimer === 0) {
+      this.escapeTimer = 0;
     }
 
     // --- aiming and firing
     const e = g.enemies;
     const ei = e.nearest(p.x, p.z, 26);
     let tx = null, tz = null, targetDist = 9999;
-    const nestInReach = goal.kind === 'nest' && goalDist < 19 &&
+    let targetKind = 'none';
+    const queenInReach = goal.kind === 'queen' && goalDist < 19 &&
       g.sector.grid.lineOfSight(p.x, p.z, goal.x, goal.z);
     const threatUrgent = ei >= 0 && this.nearestEnemyDist() < 4.5;
-    if (nestInReach && !threatUrgent) {
-      tx = goal.x; tz = goal.z; targetDist = goalDist;
+
+    // An egg is worth more dead than the thing that hatches out of it, so the
+    // autopilot prefers a clutch over the queen when nothing is on top of it.
+    // If the test never shot an egg it would not be testing the mechanic.
+    const egg = g.broods.nearestEgg(p.x, p.z, 15);
+    const eggWorthIt = egg && !threatUrgent && this.nearestEnemyDist() > 6 &&
+      g.sector.grid.lineOfSight(p.x, p.z, g.broods.eggX[egg.index], g.broods.eggZ[egg.index]);
+
+    // A vent that is quiet right now is a route that will not be used later.
+    const vent = this.chooseVent(p);
+
+    if (eggWorthIt) {
+      tx = g.broods.eggX[egg.index]; tz = g.broods.eggZ[egg.index];
+      targetDist = egg.dist; targetKind = 'egg';
+    } else if (queenInReach && !threatUrgent) {
+      tx = goal.x; tz = goal.z; targetDist = goalDist; targetKind = 'queen';
     } else if (ei >= 0 && g.sector.grid.lineOfSight(p.x, p.z, e.x[ei], e.z[ei])) {
       tx = e.x[ei]; tz = e.z[ei];
       targetDist = Math.hypot(tx - p.x, tz - p.z);
+      targetKind = 'enemy';
+    } else if (vent) {
+      tx = vent.wx; tz = vent.wz;
+      targetDist = Math.hypot(tx - p.x, tz - p.z);
+      targetKind = 'vent';
+    }
+
+    // --- thermal discipline. Early on it fires greedily and lets the barrel
+    // take the decision, which is what a player does before they have learned
+    // the bar; from 70 s it vents on its own terms. Both behaviours have to be
+    // exercised, because both are in the design.
+    const heat = g.weapons.heat01;
+    const disciplined = this.time > 70;
+    const safeToVent = this.nearestEnemyDist() > 7 || targetKind === 'vent';
+    if (!g.weapons.venting) {
+      if (heat > 0.95 && safeToVent) f.reloadPressed = true;
+      else if (disciplined && heat > 0.68 && safeToVent) f.reloadPressed = true;
+      else if (disciplined && heat > 0.55 && tx === null) f.reloadPressed = true;
     }
 
     if (tx !== null) {
       const dx = tx - p.x, dz = tz - p.z;
       const d = Math.hypot(dx, dz) || 1;
       f.aimX = dx / d; f.aimZ = dz / d; f.aimDist = d;
-      f.fire = !g.weapons.reloading && g.weapons.ammo > 0;
+      f.fire = g.weapons.ready && !f.reloadPressed;
       f.firePressed = f.fire && (this.frames % 4 === 0);
-      // Use the frag on a cluster, and use it at least once early so beat 8
-      // is exercised by play rather than by a scripted keypress.
+      // Use the frag on a cluster, and use it at least once early so the
+      // secondary beat is exercised by play rather than by a scripted keypress.
       const cluster = g.director ? g.director.countNear(tx, tz, 4.5) : 0;
       if ((cluster >= 3 || (!this.fragFired && this.time > 26)) &&
           g.weapons.grenades > 0 && targetDist > 5 && targetDist < 16) {
@@ -279,13 +407,12 @@ export class Harness {
             (g.director.countNear(t.x, t.z, 5) >= 1 || this.time > 60)) {
           const dx = t.x - p.x, dz = t.z - p.z, dd = Math.hypot(dx, dz) || 1;
           f.aimX = dx / dd; f.aimZ = dz / dd; f.aimDist = dd;
-          f.fire = !g.weapons.reloading && g.weapons.ammo > 0;
+          f.fire = g.weapons.ready;
           break;
         }
       }
     }
 
-    if (g.weapons.ammo === 0 && !g.weapons.reloading) f.reloadPressed = true;
     // dash out of trouble
     if (p.dashReady && threatDist < 2.6 && p.health01 < 0.8) f.dashPressed = true;
 
@@ -297,7 +424,17 @@ export class Harness {
     // Stall watchdog, keyed on PROGRESS only. Position is not progress: an
     // autopilot oscillating between two points looks busy and achieves nothing.
     const doneCount = [...this.beats.values()].filter((b) => b.done).length;
-    const mark = `${doneCount}|${g.nests.remaining}|${g.stats.kills}`;
+    // Kills are deliberately NOT in this key. An operator pinned at a locked
+    // bulkhead, farming a vent wave that never stops, racks up kills forever and
+    // looks busy; the only thing that counts as progress is beats, dead queens,
+    // and actually closing on the objective.
+    //
+    // And it is the CLOSEST we have ever been, not the current distance. An
+    // operator oscillating across a bucket boundary produces a new mark every
+    // couple of seconds and looks like it is making progress forever — which is
+    // exactly the failure this watchdog exists to catch.
+    this.bestObjDist = Math.min(this.bestObjDist, this.objectiveDistance());
+    const mark = `${doneCount}|${g.broods.remaining}|${Math.round(this.bestObjDist / 4)}`;
     if (mark !== this.progressMark) { this.progressMark = mark; this.progressAt = this.time; }
     const stalledFor = this.time - this.progressAt;
     if (stalledFor > 25 && !this.forcedExit) {
@@ -328,7 +465,14 @@ export class Harness {
 
     if (p.alive) mark('spawn_assault');
     if (Math.hypot(p.x - this.startX, p.z - this.startZ) >= 18) mark('move_corridor');
-    if (g.nests.remaining < g.nests.list.length) mark('destroy_first_node');
+    if (g.broods.remaining !== this._lastQueens) {
+      this._lastQueens = g.broods.remaining;
+      this.bestObjDist = Infinity;   // new objective, new baseline
+    }
+    if (this.eggKilled) mark('kill_egg');
+    if (this.overheated) mark('overheat_barrel');
+    if (this.ventSealed) mark('seal_vent');
+    if (g.broods.remaining < g.broods.list.length) mark('kill_first_queen');
     if (this.maxAlive >= 14 && g.stats.kills >= 20) mark('fight_swarm');
     if (this.tankFired) mark('trigger_explosive');
     if (p.gratingDistance >= 6) mark('cross_grating');
@@ -356,7 +500,7 @@ export class Harness {
       this.darkTime = Math.max(0, this.darkTime - dt * 0.5);
     }
 
-    if (g.nests.remaining === 0) mark('destroy_final_node');
+    if (g.broods.remaining === 0) mark('kill_final_queen');
     if (g.sector.exitReached) mark('reach_exit');
   }
 
@@ -375,7 +519,8 @@ export class Harness {
     window.__SHOT_INFO = {
       shot: this.shot, reason, t: +this.time.toFixed(2),
       room: this.roomId(), enemies: this.game.enemies.aliveNow || 0,
-      nests: this.game.nests.remaining,
+      queens: this.game.broods.remaining,
+      eggs: this.game.broods.eggsAlive,
       health: +this.game.player.health.toFixed(1),
     };
   }
@@ -409,8 +554,12 @@ export class Harness {
         peakEnemies: g.stats.peakEnemies,
         firstEnemySeen: g.stats.firstEnemySeen,
         firstDamage: g.stats.firstDamage,
-        nestDeaths: g.stats.nestDeaths.map((t) => +t.toFixed(2)),
-        enemiesAtNestDeath: g.stats.enemiesAtNestDeath,
+        queenDeaths: g.stats.queenDeaths.map((t) => +t.toFixed(2)),
+        enemiesAtQueenDeath: g.stats.enemiesAtQueenDeath,
+        eggsKilled: g.stats.eggsKilled,
+        ventsSealed: g.stats.ventsSealed,
+        forcedVents: g.weapons.forcedVents,
+        manualVents: g.weapons.manualVents,
         reliefRatio: g.stats.reliefRatio,
         health: +g.player.health.toFixed(1),
         distance: +g.player.distanceTravelled.toFixed(1),
@@ -431,7 +580,8 @@ export class Harness {
       h = Math.imul(h, 16777619) >>> 0;
     };
     mix(g.player.x); mix(g.player.z); mix(g.player.health);
-    mix(g.stats.kills); mix(g.stats.shotsFired); mix(g.nests.remaining);
+    mix(g.stats.kills); mix(g.stats.shotsFired); mix(g.broods.remaining);
+    mix(g.broods.eggsAlive); mix(g.stats.eggsKilled); mix(g.stats.ventsSealed);
     mix(this.time); mix(g.enemies.killCount);
     for (const b of BEATS) { const r = this.beats.get(b.name); mix(r.done ? r.at : -1); }
     return h >>> 0;

@@ -113,21 +113,64 @@ export class Sector {
       did++;
     }
 
-    // 7. Vents — solid wall cells the Chorus uses as ingress.
+    // 7. Vents — solid wall cells the Chorus uses as ingress, and that the
+    // player can shoot out.
+    //
+    // The authored coordinate names the wall the vent is set into, and `face`
+    // names which side of the floor that wall is on. Authored data drifts as a
+    // map is edited, though, and a vent whose cell is not actually a wall is
+    // silently nothing: no grille geometry is emitted for it, and nothing can be
+    // shot. So the coordinate is SNAPPED to the nearest wall along `face` rather
+    // than trusted — and a vent that cannot find one is reported by validate()
+    // instead of quietly disappearing.
     this.vents = [];
+    this.ventByCell = new Map();
     for (const v of this.spec.vents || []) {
       if (!g.inBounds(v.x, v.z)) continue;
-      const i = g.idx(v.x, v.z);
-      if (cells[i] === C.WALL) cells[i] = C.VENT;
-      // Spawn point is the walkable cell adjacent to the vent, in `face`.
       const off = FACE[v.face] || [0, 1];
-      const sx = v.x - off[0], sz = v.z - off[1];
-      this.vents.push({
-        cx: v.x, cz: v.z, face: v.face, room: v.room,
-        wx: (v.x + 0.5) * CELL, wz: (v.z + 0.5) * CELL,
+      // perpendicular to `face`, for sliding along the same wall run
+      const per = [off[1], off[0]];
+      let vx = -1, vz = -1;
+      // nearest first: slide 0, then +-1, +-2, +-3 along the wall
+      const slides = [0, 1, -1, 2, -2, 3, -3];
+      for (let si = 0; si < slides.length && vx < 0; si++) {
+        const slide = slides[si];
+        for (let step = 0; step <= 2; step++) {
+          const cx = v.x + off[0] * step + per[0] * slide;
+          const cz = v.z + off[1] * step + per[1] * slide;
+          if (!g.inBounds(cx, cz)) break;
+          const c = cells[g.idx(cx, cz)];
+          // VOID counts: the gap between two rooms is structurally a wall, it is
+          // just one nobody authored a face for. Typing it as a vent also makes
+          // both neighbouring rooms draw a wall there, which closes a hole.
+          // DOOR never counts — a grille in a doorway is not a grille.
+          if (c !== C.WALL && c !== C.VENT && c !== C.VOID) continue;
+          // the floor it opens onto must be on the other side
+          const fx = cx - off[0], fz = cz - off[1];
+          if (!g.inBounds(fx, fz)) continue;
+          const fc = cells[g.idx(fx, fz)];
+          if (fc !== C.FLOOR && fc !== C.GRATE && fc !== C.HAZARD) continue;
+          if (this.ventByCell.has(g.idx(cx, cz))) continue;   // one grille per cell
+          vx = cx; vz = cz; break;
+        }
+      }
+      const found = vx >= 0;
+      if (found) cells[g.idx(vx, vz)] = C.VENT;
+      const cx = found ? vx : v.x, cz = found ? vz : v.z;
+      const sx = cx - off[0], sz = cz - off[1];
+      const vent = {
+        cx, cz, face: v.face, room: v.room,
+        wx: (cx + 0.5) * CELL, wz: (cz + 0.5) * CELL,
         sx: (sx + 0.5) * CELL, sz: (sz + 0.5) * CELL,
-        valid: g.walkableCell(sx, sz),
-      });
+        valid: found && g.walkableCell(sx, sz),
+        // A vent is a grille, not a wall: it can be shot out and welded shut,
+        // which is how the player takes a flanking route off the board.
+        index: this.vents.length,
+        hp: v.hp || 70, maxHp: v.hp || 70, sealed: false,
+        authored: [v.x, v.z],
+      };
+      this.vents.push(vent);
+      if (found) this.ventByCell.set(g.idx(cx, cz), vent);
     }
 
     // 8. Static prop footprints that block movement.
@@ -171,8 +214,10 @@ export class Sector {
       }
       if (!ok) problems.push(`room ${r.id} unreachable`);
     }
-    for (const n of this.spec.nests) check(`nest ${n.id}`, n.x, n.z);
-    for (const v of this.vents) if (!v.valid) problems.push(`vent ${v.cx},${v.cz} has no adjacent floor`);
+    for (const q of this.spec.queens) check(`queen ${q.id}`, q.x, q.z);
+    for (const v of this.vents) {
+      if (!v.valid) problems.push(`vent authored at ${v.authored} found no wall along ${v.face}`);
+    }
     check('exit', this.spec.exit.x, this.spec.exit.z);
     return { ok: problems.length === 0, problems, reachableCells: count };
   }
@@ -192,13 +237,37 @@ export class Sector {
     this.events.emit('doorState', { id: d.id, state: 'unlocked', x: d.wx, z: d.wz, label: d.label });
   }
 
-  onNestDestroyed(nestId, remaining) {
+  onQueenKilled(queenId, remaining) {
     for (const d of this.doors) {
       if (d.state !== 'locked') continue;
-      if (d.unlockOn === `nest:${nestId}` || (d.unlockOn === 'allNests' && remaining === 0)) {
+      if (d.unlockOn === `queen:${queenId}` || (d.unlockOn === 'allQueens' && remaining === 0)) {
         this.unlock(d.id);
       }
     }
+  }
+
+  /**
+   * A round or a blast landed on a vent grille. Returns the vent if this sealed
+   * it, so GAME can put the plate up and emit the beat.
+   *
+   * The cell stays solid either way — a vent was never walkable. What changes is
+   * that the Chorus loses it as an ingress, which is a real, permanent, player-
+   * caused reduction in how many bearings the pressure can arrive from.
+   */
+  damageVent(cx, cz, amount) {
+    const v = this.ventByCell.get(this.grid.idx(cx, cz));
+    if (!v || v.sealed) return null;
+    v.hp -= amount;
+    if (v.hp > 0) return null;
+    v.sealed = true;
+    v.hp = 0;
+    return v;
+  }
+
+  ventAtWorld(x, z) {
+    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    if (!this.grid.inBounds(cx, cz)) return null;
+    return this.ventByCell.get(this.grid.idx(cx, cz)) || null;
   }
 
   /**

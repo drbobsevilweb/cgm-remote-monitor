@@ -41,7 +41,7 @@ export class Enemies {
     this.emerge = new Float32Array(CAP);
     this.dying = new Float32Array(CAP);
     this.seed = new Float32Array(CAP);
-    this.nestId = new Int16Array(CAP);
+    this.broodId = new Int16Array(CAP);
     this.alerted = new Uint8Array(CAP);
     this.orphaned = new Uint8Array(CAP);
     this.strand = new Float32Array(CAP);
@@ -112,7 +112,7 @@ export class Enemies {
     this.emerge[i] = opts.emergeTime ?? 0.45;
     this.dying[i] = 0;
     this.seed[i] = this.rng.next();
-    this.nestId[i] = opts.nestId ?? -1;
+    this.broodId[i] = opts.broodId ?? -1;
     this.alerted[i] = opts.alerted ? 1 : 0;
     this.orphaned[i] = 0;
     this.strand[i] = 0;
@@ -201,22 +201,22 @@ export class Enemies {
     this.killsByKind[this.kind[i]]++;
     this.events.emit('enemyDied', {
       id: i, kind: this.kind[i], x: this.x[i], y: 0.4, z: this.z[i],
-      dirX, dirZ, elite: !!a.elite, nestId: this.nestId[i], score: a.score,
+      dirX, dirZ, elite: !!a.elite, broodId: this.broodId[i], score: a.score,
     });
   }
 
   /** Panic reaction when the source of the pressure dies (DIRECTION §2 relief). */
-  panic(nestId, duration = 3.5) {
+  panic(broodId, duration = 3.5) {
     let n = 0;
     for (let k = 0; k < this.list.count; k++) {
       const i = this.list.active[k];
       if (this.state[i] === ST.DYING) continue;
-      if (nestId >= 0 && this.nestId[i] !== nestId) continue;
+      if (broodId >= 0 && this.broodId[i] !== broodId) continue;
       const a = ARCHETYPES[this.kind[i]];
       if (a.elite) continue;
       this.state[i] = ST.FLEE;
       this.timer[i] = duration * (0.7 + this.rng.next() * 0.6);
-      if (nestId >= 0) this.orphaned[i] = 1;
+      if (broodId >= 0) this.orphaned[i] = 1;
       n++;
     }
     return n;

@@ -34,7 +34,7 @@ source of truth for what the station is made of.
 | **MATERIALS** | Per surface family (steel, deck, painted, ceramic, Chorusflesh, hazard): base colour, roughness, metalness, panel/plate/tread dimensions in metres, rivet spacing and size, scratch and grime density, grime tint, normal strength. Dimensions are the construction language of DIRECTION §7 — change `panel` and every wall in the sector changes with it. |
 | **LIGHT** | Lamp intensity (candela), operator-light intensity, ambient level, IBL intensity. Per room tone: ambient colour, fill colour, **lamp accent colour** and **emitted light colour** separately, level, lamp multiplier. Plus the six meaning-colours of DIRECTION §5.5. |
 | **GRADE** | Exposure, bloom strength and threshold, the four AgX look parameters (slope / power / saturation / offset), grade saturation, vignette, film grain, chromatic aberration, shadow and highlight tint, fog density and colour. |
-| **MODELS** | Creature archetype selection, uniform scale, accent emissive strength. The selected creature is laid out in rest pose in the diorama so model changes read against the real materials. |
+| **MODELS** | Creature selection — every Chorus archetype, plus both **brood queen** types — uniform scale, accent emissive strength. Archetypes are laid out in rest pose; a queen is shown assembled and held mid-lay with her sac part-filled, because that is the pose that says what she does. Her hood is drawn with its own mineral material, so you can check that it still reads as armour rather than meat after a palette change. |
 
 The centre viewport is a diorama built with **the same `MeshBuilder`, the same
 materials and the same post-processing chain as the game**, so it is genuinely
@@ -88,12 +88,15 @@ still measures the real game.
 
 ## Known limits
 
-- **Model editing is parametric, not free-form.** You can choose an archetype,
-  scale it and change its glow; you cannot drag vertices. The creature meshes
-  are code (`buildArchetypeGeometry`), so richer model editing means exposing
-  more of their part dimensions as data — the same refactor that was done for
+- **Model editing is parametric, not free-form.** You can choose a creature,
+  scale it and change its glow; you cannot drag vertices. The meshes are code
+  (`buildArchetypeGeometry`, `buildQueenGeometry`), so richer model editing means
+  exposing their part dimensions as data — the same refactor that was done for
   textures, applied to `Archetypes.js`. That is the obvious next step and it is
   not difficult, just unstarted.
+- **Eggs are not in the model tab.** Their whole design is an animation over
+  time — a bright core growing inside a shell as incubation runs — and a static
+  diorama shows none of that. Watch them in the game instead.
 - **Props and level layout are not editable here.** The sector is authored data
   in `sectors/helix_deep.js`; a layout editor is a different tool.
 - Texture regeneration takes roughly 200 ms, so slider drags are debounced.

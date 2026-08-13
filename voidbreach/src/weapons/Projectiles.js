@@ -72,7 +72,7 @@ export class Projectiles {
       let ny = this.y[i] + this.vy[i] * dt;
       let nz = this.z[i] + this.vz[i] * dt;
 
-      // --- free-standing destructibles (nests, tanks): not in the collision
+      // --- free-standing destructibles (queens, eggs, tanks): not in the collision
       // grid, so they are tested explicitly before the walls behind them.
       if (this.obstacles && this.kind[i] !== P_GRENADE) {
         const o = this._obs || (this._obs = {});
@@ -103,7 +103,8 @@ export class Projectiles {
               surface: surfaceOf(hitOut.cell), power: 0.25, weapon: 'grenade',
             });
           } else {
-            this.impact(i, hitOut.x, ny, hitOut.z, hitOut.nx, hitOut.nz, hitOut.cell);
+            this.impact(i, hitOut.x, ny, hitOut.z, hitOut.nx, hitOut.nz, hitOut.cell,
+              hitOut.cx, hitOut.cz);
             killed = true;
           }
         }
@@ -170,13 +171,19 @@ export class Projectiles {
     }
   }
 
-  impact(i, x, y, z, nx, nz, cell) {
+  impact(i, x, y, z, nx, nz, cell, cx = -1, cz = -1) {
     this.events.emit('impact', {
       x, y: Math.max(0.05, y), z, nx, ny: 0, nz,
       surface: surfaceOf(cell),
       power: this.kind[i] === P_SPIT ? 0.5 : 0.35,
       weapon: this.kind[i] === P_SPIT ? 'spit' : 'bullet',
       team: this.team[i],
+      // Carried so GAME can route it to whatever destructible occupies the cell
+      // that stopped the round. Wall grilles are the only one today. The CELL is
+      // carried, not just the point: an impact lands exactly on a cell boundary,
+      // and flooring the world position there picks the cell in FRONT of the
+      // wall rather than the wall itself.
+      damage: this.damage[i], cx, cz,
     });
     if (this.kind[i] === P_SPIT) {
       this.events.emit('acidPool', { x, z, radius: 1.5, ttl: 5.5 });

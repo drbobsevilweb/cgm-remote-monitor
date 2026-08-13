@@ -531,16 +531,17 @@ export class Environment {
   }
 
   /**
-   * Chorusflesh growing out of the nests and along the routes it uses. Reads as
+   * Chorusflesh growing out of the queens' chambers and along the routes the
+   * Chorus uses. Reads as
    * inversion: violet organic climbing amber-lit structure.
    */
   buildFlesh() {
     const b = new MeshBuilder();
     const g = this.sector.grid;
     const rng = this.rng;
-    for (const n of this.sector.spec.nests) {
+    for (const n of this.sector.spec.queens) {
       const cx = n.x, cz = n.z;
-      const spread = n.type === 'brood' ? 6 : 7;
+      const spread = n.type === 'matriarch' ? 7 : 6;
       for (let dz = -spread; dz <= spread; dz++) {
         for (let dx = -spread; dx <= spread; dx++) {
           const x = cx + dx, z = cz + dz;
@@ -684,35 +685,44 @@ export class Environment {
     this.root.add(this.tankMesh);
   }
 
-  /** Nest geometry, handed to the ENEMIES subsystem which owns nest state. */
-  makeNestGeometry(type) {
+  /**
+   * Seal plates for shot-out vents. One instanced mesh for the whole sector,
+   * every instance parked at zero scale until its vent is actually sealed.
+   */
+  buildVentSeals() {
     const b = new MeshBuilder();
-    const rng = this.rng;
-    if (type === 'brood') {
-      // wall-mounted sack: a swollen mass with a puckered vent
-      b.setColor(0.95, 0.9, 1.0);
-      b.addCylinder(0, 0, 0, 1.45, 0.5, 12, true, false, 1);
-      for (let i = 0; i < 9; i++) {
-        const a = rng.angle(), r = rng.range(0.2, 1.15), h = rng.range(1.1, 2.6);
-        b.addCylinder(Math.cos(a) * r, 0.3, Math.sin(a) * r, rng.range(0.45, 0.95), h, 8, true, false, 1);
-      }
-      b.setColor(1.0, 0.95, 1.0);
-      b.addCylinder(0, 2.1, 0, 0.75, 0.9, 10, true, false, 1);
-      b.addCylinder(0, 2.9, 0, 0.34, 0.5, 8, true, false, 1);
-    } else {
-      // vent colony: a low crown of chimneys over a burrow
-      b.setColor(0.9, 0.85, 1.0);
-      b.addCylinder(0, 0, 0, 2.1, 0.35, 14, true, false, 1);
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2 + rng.range(-0.2, 0.2);
-        const r = rng.range(0.6, 1.5);
-        b.addCylinder(Math.cos(a) * r, 0.2, Math.sin(a) * r, rng.range(0.28, 0.55), rng.range(0.9, 2.2), 7, true, false, 1);
-      }
-      b.setColor(1.0, 0.92, 1.0);
-      b.addCylinder(0, 0.3, 0, 0.9, 1.3, 10, true, false, 1);
+    b.setColor(0.34, 0.35, 0.37);
+    b.addBox(-1.15, -0.86, -0.09, 1.15, 0.86, 0.09, 2);
+    b.setColor(0.55, 0.44, 0.20);
+    for (let i = -1; i <= 1; i += 2) {
+      b.addBox(i * 1.0 - 0.07, -0.78, -0.13, i * 1.0 + 0.07, 0.78, 0.13, 3);
     }
     b.setColor(1, 1, 1);
-    return b.build('nest_' + type);
+    const geom = b.build('vent_seal');
+    const mesh = new THREE.InstancedMesh(geom, this.materials.steel, Math.max(1, this.sector.vents.length));
+    mesh.frustumCulled = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    const m4 = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+    for (let i = 0; i < mesh.count; i++) mesh.setMatrixAt(i, m4);
+    mesh.instanceMatrix.needsUpdate = true;
+    this.ventSealMesh = mesh;
+    this.root.add(mesh);
+    return mesh;
+  }
+
+  /** Drop a seal plate over a vent that has been shot out. */
+  sealVent(vent, index) {
+    if (!this.ventSealMesh) return;
+    const yaw = Math.atan2(-FACE_DIR[vent.face][0], -FACE_DIR[vent.face][1]);
+    const m4 = new THREE.Matrix4();
+    m4.makeRotationY(yaw);
+    m4.setPosition(
+      vent.wx + FACE_DIR[vent.face][0] * -(CELL / 2 - 0.14),
+      0.98,
+      vent.wz + FACE_DIR[vent.face][1] * -(CELL / 2 - 0.14));
+    this.ventSealMesh.setMatrixAt(index, m4);
+    this.ventSealMesh.instanceMatrix.needsUpdate = true;
   }
 
   // ----------------------------------------------------------------- update
@@ -788,3 +798,6 @@ export class Environment {
 
 const DX = [1, -1, 0, 0];
 const DZ = [0, 0, 1, -1];
+
+// Which way a wall-mounted feature sits, keyed the same way the sector spec is.
+const FACE_DIR = { 'x-': [-1, 0], 'x+': [1, 0], 'z-': [0, -1], 'z+': [0, 1] };

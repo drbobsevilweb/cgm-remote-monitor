@@ -182,10 +182,10 @@ export const GATES = {
   C5_gratingPattern: (v) => ({
     pass: v >= 0.25, value: v.toFixed(4), limit: '>=0.25',
   }),
-  V8_nestColour: (frac, ctx = {}) => ({
-    pass: ctx.nestInFrame ? frac >= 0.0008 : frac <= 0.0008,
+  V8_queenColour: (frac, ctx = {}) => ({
+    pass: ctx.queenInFrame ? frac >= 0.0008 : frac <= 0.0008,
     value: (frac * 100).toFixed(4) + '%',
-    limit: ctx.nestInFrame ? 'present' : 'absent',
+    limit: ctx.queenInFrame ? 'present' : 'absent',
   }),
   P1_drawCalls: (v) => ({ pass: v <= 220, value: String(v), limit: '<=220' }),
   P2_triangles: (v) => ({ pass: v <= 900000, value: String(v), limit: '<=900k' }),

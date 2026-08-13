@@ -23,7 +23,7 @@ import { Player } from '../player/Player.js';
 import { Weapons } from '../weapons/Weapons.js';
 import { P_SPIT } from '../weapons/Projectiles.js';
 import { Enemies, ARCHETYPES, KIND } from '../enemies/Enemies.js';
-import { Nests } from '../enemies/Nests.js';
+import { Broods } from '../enemies/Broods.js';
 import { Director } from '../director/Director.js';
 import { Profiler } from '../qa/Profiler.js';
 import { PAL, applyPaletteOverrides } from '../environment/Palette.js';
@@ -63,7 +63,8 @@ export class Game {
     this.stats = {
       kills: 0, shotsFired: 0, damageTaken: 0,
       firstEnemySeen: -1, firstDamage: -1, peakEnemies: 0,
-      nestDeaths: [], enemiesAtNestDeath: [],
+      queenDeaths: [], enemiesAtQueenDeath: [],
+      eggsKilled: 0, ventsSealed: 0, forcedVents: 0,
     };
   }
 
@@ -100,12 +101,13 @@ export class Game {
     this.weapons.projectiles.targets = this.enemies.targetInterface(this.player);
     this.weapons.projectiles.obstacles = this.makeObstacleInterface();
 
-    this.nests = new Nests(this.sector, this.enemies, this.events, this.rng, this.env);
-    this.nests.registerLights(this.lighting);
-    this.renderer.scene.add(this.nests.root);
+    this.broods = new Broods(this.sector, this.enemies, this.events, this.rng);
+    this.broods.registerLights(this.lighting);
+    this.renderer.scene.add(this.broods.root);
+    this.env.buildVentSeals();
 
     this.pickups = this.buildPickups();
-    this.director = new Director(this.sector, this.enemies, this.nests, this.events, this.rng);
+    this.director = new Director(this.sector, this.enemies, this.broods, this.events, this.rng);
 
     this.setLoading(0.72, 'PREWARMING');
     await frame();
@@ -188,12 +190,30 @@ export class Game {
     this.vfx.addTracer(this.player.x, 1.2, this.player.z, 1, 0, 4, [1, 1, 1]);
     this.vfx.update(0.016, 0);
     this.vfx.draw(this.renderer.camera);
-    for (const n of this.nests.list) n.mesh.visible = true;
+    for (const q of this.broods.list) q.group.visible = true;
+    // Eggs are their own two materials and would otherwise compile the first
+    // time a queen lays, which is exactly the moment that must not hitch.
+    const probeEggs = [];
+    for (const q of this.broods.list.slice(0, 1)) {
+      const id = this.broods.layEgg(q, this.player.x + 5, this.player.z + 5, 0, 9, false);
+      if (id >= 0) probeEggs.push(id);
+    }
+    this.broods.updateEggs(0.016, 0);
+    if (this.env.ventSealMesh && this.sector.vents.length) {
+      this.env.sealVent(this.sector.vents[0], 0);
+    }
 
     r.compile(this.renderer.scene, this.renderer.camera);
     this.renderer.post.render(this.renderer.scene, this.renderer.camera);
 
     for (const id of probes) this.enemies.list.release(id);
+    for (const id of probeEggs) this.broods.freeEgg(id);
+    this.broods.updateEggs(0.016, 0);
+    if (this.env.ventSealMesh && this.sector.vents.length) {
+      const m4 = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
+      this.env.ventSealMesh.setMatrixAt(0, m4);
+      this.env.ventSealMesh.instanceMatrix.needsUpdate = true;
+    }
     this.enemies.draw(1, 0);
     this.vfx.list.clear();
     this.vfx.tracerList.length = 0;
@@ -204,16 +224,29 @@ export class Game {
   }
 
   // ------------------------------------------------------------- pickups
+  /**
+   * Pickups differ by SHAPE as well as by colour, because two of them are cyan
+   * and a colourblind player still has to be able to tell an armour plate from a
+   * coolant canister at eight metres under a red lamp. Each is still one
+   * instanced draw call.
+   */
   buildPickups() {
-    const geom = new THREE.BoxGeometry(0.44, 0.30, 0.44);
     const list = [];
     const meshes = {};
-    const COL = { ammo: 0xffb45a, medkit: 0xff5a5a, armour: 0x5fd8ff, flare: 0xb8ff4a };
-    for (const kind of Object.keys(COL)) {
+    const SPEC = {
+      arc:     { colour: 0xffb45a, size: [0.50, 0.20, 0.26] },   // a flat cell
+      coolant: { colour: 0xa8f0ff, size: [0.24, 0.52, 0.24] },   // a tall canister
+      medkit:  { colour: 0xff5a5a, size: [0.40, 0.30, 0.40] },   // a case
+      armour:  { colour: 0x5fd8ff, size: [0.52, 0.12, 0.44] },   // a plate
+      flare:   { colour: 0xb8ff4a, size: [0.16, 0.44, 0.16] },   // a stick
+    };
+    for (const kind of Object.keys(SPEC)) {
+      const sp = SPEC[kind];
       const mat = new THREE.MeshStandardMaterial({
-        color: COL[kind], emissive: new THREE.Color(COL[kind]), emissiveIntensity: 0.7,
+        color: sp.colour, emissive: new THREE.Color(sp.colour), emissiveIntensity: 0.7,
         roughness: 0.5, metalness: 0.2,
       });
+      const geom = new THREE.BoxGeometry(sp.size[0], sp.size[1], sp.size[2]);
       const items = this.env.pickups.filter((p) => p.kind === kind);
       const m = new THREE.InstancedMesh(geom, mat, Math.max(1, items.length));
       m.frustumCulled = false;
@@ -267,9 +300,14 @@ export class Game {
 
   tryPickup(p) {
     switch (p.kind) {
-      case 'ammo':
-        if (this.weapons.reserve >= this.weapons.carbine.spec.reserve) return false;
-        this.weapons.addAmmo(128); this.weapons.addGrenades(1); break;
+      case 'arc':
+        this.weapons.giveSpecial('arclance');
+        this.weapons.addGrenades(1); break;
+      case 'coolant':
+        // Worth nothing when the barrel is already cold: leave it on the deck
+        // so it is still there when it means something.
+        if (this.weapons.heat < 0.25 && this.weapons.coolBoost > 0) return false;
+        this.weapons.flushCoolant(12); break;
       case 'medkit':
         if (this.player.health >= this.player.maxHealth) return false;
         this.player.heal(58); this.vfx.screen.heal = 1; break;
@@ -306,8 +344,12 @@ export class Game {
           const t = proj - Math.sqrt(Math.max(0, r * r - perp2));
           if (t < bestT) { bestT = t; hit = { ref, kind, t: Math.max(0, t) }; }
         };
-        for (const n of self.nests.list) {
-          if (n.alive) check(n.x, n.z, n.type === 'brood' ? 1.7 : 2.1, n, 'nest');
+        for (const q of self.broods.list) {
+          if (q.alive) check(q.x, q.z, q.type === 'matriarch' ? 2.0 : 1.7, q, 'queen');
+        }
+        const b = self.broods;
+        for (let i = 0; i < b.eggCount; i++) {
+          if (b.eggAlive[i]) check(b.eggX[i], b.eggZ[i], 0.44, i, 'egg');
         }
         for (let i = 0; i < self.env.tanks.length; i++) {
           const t = self.env.tanks[i];
@@ -319,14 +361,56 @@ export class Game {
         return true;
       },
       damage(kind, ref, amount, x, y, z, dirX, dirZ) {
-        if (kind === 'nest') {
-          self.nests.damage(ref, amount, x, y, z);
+        if (kind === 'queen') {
+          self.broods.damageQueen(ref, amount, x, y, z, dirX, dirZ);
           self.vfx.fluid(x, y, z, -dirX, -dirZ, 4);
+        } else if (kind === 'egg') {
+          self.broods.damageEgg(ref, amount, x, y, z);
         } else if (kind === 'tank') {
           self.damageTank(ref, amount);
         }
       },
     };
+  }
+
+  /**
+   * Blast damage against the brood. A frag in a clutch is meant to be the
+   * strongest single answer in the game to a queen who has been laying for
+   * twenty seconds, and a queen's hood does not stop a blast — explosions carry
+   * no direction, so they are never reduced.
+   */
+  explodeBrood(e) {
+    const b = this.broods;
+    for (let i = b.eggCount - 1; i >= 0; i--) {
+      if (!b.eggAlive[i]) continue;
+      const d = Math.hypot(b.eggX[i] - e.x, b.eggZ[i] - e.z);
+      if (d > e.radius) continue;
+      b.damageEgg(i, e.power * (1 - clamp01(d / e.radius)), b.eggX[i], 0.4, b.eggZ[i]);
+    }
+    for (const q of b.list) {
+      if (!q.alive) continue;
+      const d = Math.hypot(q.x - e.x, q.z - e.z);
+      if (d > e.radius + 1.6) continue;
+      b.damageQueen(q, e.power * 0.55 * (1 - clamp01(d / (e.radius + 1.6))), q.x, 1.6, q.z);
+    }
+    // Blasts strip grilles as well: a frag through a doorway can close a route.
+    for (const v of this.sector.vents) {
+      if (v.sealed) continue;
+      if (Math.hypot(v.wx - e.x, v.wz - e.z) > e.radius) continue;
+      this.sealVentAt(v.wx, v.wz, e.power * 0.5);
+    }
+  }
+
+  /** Route damage into a wall grille, and put the plate up if that killed it. */
+  damageVentCell(cx, cz, amount) {
+    const v = this.sector.damageVent(cx, cz, amount);
+    if (!v) return;
+    this.env.sealVent(v, v.index);
+    this.events.emit('ventSealed', { x: v.wx, z: v.wz, id: v.index });
+  }
+
+  sealVentAt(x, z, amount) {
+    this.damageVentCell(Math.floor(x / CELL), Math.floor(z / CELL), amount);
   }
 
   damageTank(i, amount) {
@@ -361,9 +445,39 @@ export class Game {
       }
     });
     ev.on('dryFire', () => audio.ui('dry'));
-    ev.on('reload', (e) => audio.reload(e.stage));
 
-    ev.on('impact', (e) => { vfx.impact(e); audio.impact(e); });
+    // --- thermal cycle -------------------------------------------------
+    ev.on('vent', (e) => {
+      audio.vent(e.stage, e.forced);
+      if (e.stage === 'release') {
+        const p = this.player;
+        // A forced vent is a much bigger event than one you chose: the barrel
+        // dumps in one go, and it should look like it hurt.
+        vfx.smoke(p.x, 1.15, p.z, e.forced ? 16 : 7, e.forced ? 2.6 : 1.6, 0.55,
+          [0.72, 0.78, 0.84]);
+        light.pulse(p.x, 1.2, p.z, 0xbfe6ff, e.forced ? 220 : 90, 7, 0.22);
+        if (e.forced) {
+          cam.addShake(0.10);
+          this.stats.forcedVents++;
+          this.events.emit('message', { text: 'BARREL OVERHEAT — VENTING', tone: 'warn', ttl: 1.8 });
+        }
+      }
+    });
+    ev.on('heatWarning', (e) => audio.ui('heat'));
+    ev.on('coolant', () => { vfx.screen.heal = 0.5; audio.ui('coolant'); });
+    ev.on('specialArmed', (e) => {
+      this.events.emit('message', { text: e.name + ' ARMED', tone: 'good', ttl: 2.4 });
+    });
+    ev.on('specialSpent', () => audio.ui('dry'));
+
+    ev.on('impact', (e) => {
+      vfx.impact(e); audio.impact(e);
+      // A grille is a destructible, not a wall. Seal it and the Chorus has one
+      // fewer bearing to come from — permanently, and because the player did it.
+      if (e.surface === 'vent' && e.team === 0 && e.damage && e.cx >= 0) {
+        this.damageVentCell(e.cx, e.cz, e.damage);
+      }
+    });
 
     ev.on('enemyHit', (e) => {
       const a = ARCHETYPES[e.kind];
@@ -401,6 +515,7 @@ export class Game {
       cam.addShake(e.kind === 'tank' ? 0.30 : 0.20);
       audio.explosion(e);
       this.enemies.explode(e.x, e.z, e.radius, e.power);
+      this.explodeBrood(e);
       // chain: tanks detonate each other
       for (let i = 0; i < this.env.tanks.length; i++) {
         const t = this.env.tanks[i];
@@ -428,26 +543,66 @@ export class Game {
       }
     });
 
-    ev.on('nestDamaged', (e) => {
-      vfx.fluid(e.x, e.y, e.z, 0, 0, 5, [0.62, 0.14, 0.68]);
+    // --- queens and eggs -----------------------------------------------
+    ev.on('queenDamaged', (e) => {
+      if (e.blocked) {
+        // Sparks off the hood, not fluid. The feedback has to be different or
+        // the player never learns that the front of her does not count.
+        vfx.sparks(e.x, e.y, e.z, 0, 0, 6, 0.9, [2.4, 2.0, 1.5]);
+      } else {
+        vfx.fluid(e.x, e.y, e.z, 0, 0, 5, [0.62, 0.14, 0.68]);
+      }
       light.pulse(e.x, e.y, e.z, PAL.violet, 120, 8, 0.16);
     });
 
-    ev.on('nestDestroyed', (e) => {
+    ev.on('queenConvulsed', (e) => {
+      light.pulse(e.x, 1.6, e.z, PAL.violet, 900, 18, 0.4);
+      audio.chorus(KIND.BULWARK, e.x, e.z, 'windup');
+    });
+
+    ev.on('queenKilled', (e) => {
       vfx.nestRupture(e.x, e.y, e.z);
       light.pulse(e.x, 1.4, e.z, PAL.violet, 5200, 34, 0.8);
       cam.addShake(0.33);
       audio.nestRupture(e);
-      this.stats.nestDeaths.push(this.clock.simTime);
-      this.stats.enemiesAtNestDeath.push(this.enemies.aliveNow || 0);
-      if (this.stats.nestDeaths.length === 1) {
+      this.stats.queenDeaths.push(this.clock.simTime);
+      this.stats.enemiesAtQueenDeath.push(this.enemies.aliveNow || 0);
+      if (this.stats.queenDeaths.length === 1) {
         this._reliefProbe = { t: this.clock.simTime, before: this.enemies.aliveNow || 0 };
       }
     });
 
-    ev.on('nestSpawn', (e) => {
-      vfx.fluid(e.x, 0.4, e.z, 0, 0, 5, [0.6, 0.18, 0.66]);
-      light.pulse(e.x, 0.8, e.z, PAL.violet, 90, 8, 0.22);
+    ev.on('eggLaid', (e) => {
+      vfx.fluid(e.x, 0.35, e.z, 0, 0, 4, [0.6, 0.18, 0.66]);
+    });
+
+    ev.on('eggHatched', (e) => {
+      vfx.fluid(e.x, 0.4, e.z, 0, 0, 7, [0.6, 0.18, 0.66]);
+      light.pulse(e.x, 0.8, e.z, PAL.violet, 140, 9, 0.24);
+    });
+
+    ev.on('eggHit', (e) => vfx.fluid(e.x, e.y, e.z, 0, 0, 3, [0.62, 0.14, 0.68]));
+
+    ev.on('eggDestroyed', (e) => {
+      // A ripe egg bursts; a fresh one just splits. The difference is the
+      // feedback for having got there in time.
+      vfx.fluid(e.x, e.y, e.z, 0, 0, 8 + Math.round(e.ripe * 14), [0.62, 0.14, 0.68]);
+      vfx.bloodDecal(e.x, e.z, 1.1 + e.ripe * 0.8, [0.42, 0.10, 0.46]);
+      light.pulse(e.x, 0.6, e.z, PAL.violet, 180 + e.ripe * 320, 8, 0.2);
+      audio.impact({ x: e.x, z: e.z, surface: 'flesh' });
+      this.stats.eggsKilled++;
+    });
+
+    ev.on('eggCollapsed', (e) => {
+      vfx.fluid(e.x, e.y, e.z, 0, 0, 4, [0.42, 0.12, 0.46]);
+    });
+
+    ev.on('ventSealed', (e) => {
+      vfx.sparks(e.x, 1.0, e.z, 0, 0, 22, 1.5, [3.0, 2.2, 1.1]);
+      light.pulse(e.x, 1.2, e.z, 0xffb45a, 420, 9, 0.34);
+      audio.impact({ x: e.x, z: e.z, surface: 'grate' });
+      this.stats.ventsSealed++;
+      this.events.emit('message', { text: 'VENT SEALED', tone: 'good', ttl: 2 });
     });
 
     ev.on('playerHit', (e) => {
@@ -517,7 +672,7 @@ export class Game {
 
     this.sector.nav.update(dt, this.player.x, this.player.z, this.player.aimX, this.player.aimZ);
     this.enemies.update(dt, time);
-    this.nests.update(dt, time, this.player.x, this.player.z);
+    this.broods.update(dt, time, this.player.x, this.player.z);
     if (playing) this.director.update(dt, this.player, time);
 
     this.sector.update(dt, this.player.x, this.player.z,
@@ -613,7 +768,7 @@ export class Game {
     this.hud.draw(this.hudState(time));
 
     this.audio.update(realDelta, p.x, p.z, this.director ? this.director.intensity : 0,
-      (this.enemies.aliveNow || 0) > 2 && this.nests.remaining > 0);
+      (this.enemies.aliveNow || 0) > 2 && this.broods.remaining > 0);
 
     this.profiler.sample({
       calls: this.renderer.stats.calls,
@@ -640,14 +795,14 @@ export class Game {
   }
 
   hudState(time) {
-    if (!this.player || !this.nests) {
+    if (!this.player || !this.broods) {
       return { mode: 'loading', loadProgress: this.loadProgress, loadingText: this.loadingText };
     }
     const p = this.player;
-    const near = this.nests.nearest(p.x, p.z);
-    let nestDir = null;
+    const near = this.broods.nearest(p.x, p.z);
+    let queenDir = null;
     if (near && near.dist > 12 && near.dist < 70) {
-      nestDir = { x: (near.nest.x - p.x) / near.dist, z: (near.nest.z - p.z) / near.dist };
+      queenDir = { x: (near.queen.x - p.x) / near.dist, z: (near.queen.z - p.z) / near.dist };
     }
     const screen = this.worldToScreen(
       p.x + p.aimX * (this.input.frame ? this.input.frame.aimDist : 6),
@@ -658,13 +813,18 @@ export class Game {
       loadProgress: this.loadProgress, loadingText: this.loadingText,
       health: p.health, health01: p.health01,
       armour01: p.maxArmour ? p.armour / p.maxArmour : 0,
-      ammo: this.weapons.ammo, reserve: this.weapons.reserve,
-      weaponName: 'MK4 PULSE CARBINE',
-      reloading: this.weapons.reloading, reloadProgress: this.weapons.reloadProgress,
+      heat01: this.weapons.heat01,
+      venting: this.weapons.venting, overheated: this.weapons.overheated,
+      ventProgress: this.weapons.ventProgress,
+      hot: this.weapons.heat01 >= this.weapons.carbine.spec.warnHeat,
+      coolBoost: this.weapons.coolBoost > 0,
+      weaponName: this.weapons.weaponName,
+      charges: this.weapons.special ? this.weapons.charges : null,
       grenades: this.weapons.grenades, dashReady: p.dashReady,
       spread: this.weapons.carbine.spread,
-      nestsRemaining: this.nests.remaining, nestsTotal: this.nests.list.length,
-      nestDir, kills: this.stats.kills, time,
+      queensRemaining: this.broods.remaining, queensTotal: this.broods.list.length,
+      eggsAlive: this.broods.eggsAlive,
+      queenDir, kills: this.stats.kills, time,
       cursorX: screen.x, cursorY: screen.y,
     };
   }

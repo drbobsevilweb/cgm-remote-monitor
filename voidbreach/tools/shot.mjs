@@ -10,6 +10,8 @@ const browser = await chromium.launch({
   args: HEADLESS_GL_ARGS,
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+// see tools/capture.mjs: the per-call timeout option is not reliably honoured
+page.setDefaultTimeout(600000);
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });

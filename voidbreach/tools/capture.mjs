@@ -10,10 +10,13 @@ import path from 'node:path';
 
 const SHOTS = process.argv[2]
   ? process.argv[2].split(',')
-  : ['OPENING', 'FIRST_COMBAT', 'GRATING', 'DARK_CORRIDOR', 'SWARM', 'NEST', 'EXPLOSION', 'ELITE'];
+  : ['OPENING', 'FIRST_COMBAT', 'GRATING', 'DARK_CORRIDOR', 'SWARM', 'QUEEN', 'CLUTCH', 'EXPLOSION', 'ELITE'];
 const SEED = process.argv[3] || '1337';
 const OUT = process.argv[4] || 'captures/current';
 const W = 1600, H = 900;
+// Headless renders through a software rasteriser, so a state 20 s into the run
+// costs minutes of wall clock. This has to be generous or it measures nothing.
+const SHOT_TIMEOUT_MS = +(process.env.SHOT_TIMEOUT_MS || 1500000);
 
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -25,7 +28,15 @@ const report = { seed: SEED, shots: {} };
 
 for (const shot of SHOTS) {
   const context = await browser.newContext({ viewport: { width: W, height: H } });
+  // The per-call `timeout` option on waitForFunction is NOT honoured by every
+  // Playwright build — it silently falls back to the 30 s context default. That
+  // capped every capture at 30 s of wall clock, which under SwiftShader is about
+  // 1.5 s of simulation: OPENING was reachable and nothing else was, which is
+  // the entire reason the visual gates were only ever measured for one state.
+  // Set the default explicitly and do not rely on the option.
+  context.setDefaultTimeout(SHOT_TIMEOUT_MS);
   const page = await context.newPage();
+  page.setDefaultTimeout(SHOT_TIMEOUT_MS);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -35,24 +46,24 @@ for (const shot of SHOTS) {
     { waitUntil: 'load' });
   let ok = true;
   try {
-    await page.waitForFunction(() => window.__SHOT_READY === true, { timeout: 600000 });
+    await page.waitForFunction(() => window.__SHOT_READY === true, { timeout: SHOT_TIMEOUT_MS });
   } catch (e) { ok = false; }
 
   const info = await page.evaluate(() => {
     const g = window.__GAME;
     if (!g) return null;
     const p = g.player;
-    const nest = g.nests.nearest(p.x, p.z);
+    const queen = g.broods.nearest(p.x, p.z);
     // Is a live nest actually inside the camera frustum? The colour-meaning gate
     // needs the ground truth, not a guess from the pixels.
-    let nestInFrame = false;
-    for (const n of g.nests.list) {
+    let queenInFrame = false;
+    for (const n of g.broods.list) {
       if (!n.alive) continue;
       const v = new (window.__THREE ? window.__THREE.Vector3 : Object)();
       const s = g.worldToScreen(n.x, 1.2, n.z);
       if (s.x > -80 && s.x < g.hud.w + 80 && s.y > -80 && s.y < g.hud.h + 80) {
         const d = Math.hypot(n.x - p.x, n.z - p.z);
-        if (d < 42 && g.sector.grid.lineOfSight(p.x, p.z, n.x, n.z)) nestInFrame = true;
+        if (d < 42 && g.sector.grid.lineOfSight(p.x, p.z, n.x, n.z)) queenInFrame = true;
       }
     }
     // player screen position, for the composition gates
@@ -62,9 +73,10 @@ for (const shot of SHOTS) {
       room: g.sector.roomAtWorld(p.x, p.z)?.id,
       roomTone: g.sector.roomAtWorld(p.x, p.z)?.tone,
       enemies: g.enemies.aliveNow || 0,
-      nestsRemaining: g.nests.remaining,
-      nestInFrame,
-      nestDist: nest ? +nest.dist.toFixed(1) : null,
+      queensRemaining: g.broods.remaining,
+      eggsAlive: g.broods.eggsAlive,
+      queenInFrame,
+      queenDist: queen ? +queen.dist.toFixed(1) : null,
       player: { x: +p.x.toFixed(2), z: +p.z.toFixed(2), health: +p.health.toFixed(1) },
       playerScreen: { x: Math.round(ps.x), y: Math.round(ps.y) },
       camera: {

@@ -1,24 +1,24 @@
 // DIRECTOR — owns pressure, not behaviour.
 //
 // The 60-second contract (DIRECTION §2) is a pacing problem, so it is solved
-// here: the director decides when nests are live, when to add a flanking wave,
-// and when to get out of the way so the relief after a nest dies is total.
+// here: the director decides when the queens are laying, when to add a flanking
+// wave, and when to get out of the way so the relief after a queen dies is total.
 
 import { KIND } from '../enemies/Archetypes.js';
 import { clamp, clamp01 } from '../core/Mathx.js';
 import { CELL } from '../level/Grid.js';
 
 export class Director {
-  constructor(sector, enemies, nests, events, rng) {
+  constructor(sector, enemies, broods, events, rng) {
     this.sector = sector;
     this.enemies = enemies;
-    this.nests = nests;
+    this.broods = broods;
     this.events = events;
     this.rng = rng.child('director');
 
     this.time = 0;
     this.intensity = 0;         // 0..1 smoothed pressure estimate
-    this.relief = 0;            // seconds of enforced quiet after a nest dies
+    this.relief = 0;            // seconds of enforced quiet after a queen dies
     this.waveTimer = 14;
     this.objective = null;
     this.objectiveIndex = -1;
@@ -27,9 +27,9 @@ export class Director {
     this.ventWaveCooldown = 0;
     this.stats = { waves: 0, ventSpawns: 0 };
 
-    nests.active = true;
+    broods.active = true;
 
-    events.on('nestDestroyed', (e) => this.onNestDestroyed(e));
+    events.on('queenKilled', (e) => this.onQueenKilled(e));
     events.on('beat', (e) => this.beats.add(e.name));
     this.advanceObjective();
   }
@@ -43,17 +43,17 @@ export class Director {
 
   emitObjective() {
     if (!this.objective) return;
-    const text = this.objective.text.replace('{n}', String(this.nests.remaining));
+    const text = this.objective.text.replace('{n}', String(this.broods.remaining));
     this.events.emit('objective', { text, kind: this.objective.kind, id: this.objective.id });
   }
 
-  onNestDestroyed(e) {
-    // Total relief. The drone stops, the spawns stop, and the room empties.
+  onQueenKilled(e) {
+    // Total relief. The drone stops, the laying stops, and the room empties.
     this.relief = 7.0;
     this.intensity = 0;
     this.waveTimer = Math.max(this.waveTimer, 16);
-    if (this.objective && (this.objective.kind === 'nest' || this.objective.kind === 'nests')) {
-      if (this.nests.remaining === 0 || this.objective.kind === 'nest') this.advanceObjective();
+    if (this.objective && (this.objective.kind === 'queen' || this.objective.kind === 'queens')) {
+      if (this.broods.remaining === 0 || this.objective.kind === 'queen') this.advanceObjective();
       else this.emitObjective();
     }
   }
@@ -74,18 +74,19 @@ export class Director {
     const target = clamp01(near / 14) * 0.7 + (1 - player.health01) * 0.3;
     this.intensity += (target - this.intensity) * clamp01(dt * 1.4);
 
-    // Nests only produce while the player is in their part of the station.
-    this.nests.active = this.relief <= 0;
+    // Queens only lay while the player is in their part of the station, and
+    // nothing in the pipe advances during a relief window either.
+    this.broods.active = this.relief <= 0;
 
     // --- flanking wave: added only when the player is comfortable, never when
     // they are already losing. Pressure should escalate, not pile on.
     this.waveTimer -= dt;
     if (this.waveTimer <= 0) {
       this.waveTimer = 24 + this.rng.range(-4, 8);
-      const liveNear = this.nests.list.filter((n) => n.alive && n.woken &&
-        Math.hypot(n.x - player.x, n.z - player.z) < 40).length;
+      const liveNear = this.broods.list.filter((q) => q.alive && q.woken &&
+        Math.hypot(q.x - player.x, q.z - player.z) < 40).length;
       if (this.relief <= 0 && player.health01 > 0.55 && near < 8 && liveNear <= 1 &&
-          this.nests.remaining > 0) {
+          this.broods.remaining > 0) {
         this.ventWave(player);
       }
     }
@@ -95,7 +96,7 @@ export class Director {
   ventWave(player) {
     if (this.ventWaveCooldown > 0) return 0;
     const vents = this.sector.vents.filter((v) => {
-      if (!v.valid) return false;
+      if (!v.valid || v.sealed) return false;
       const d = Math.hypot(v.sx - player.x, v.sz - player.z);
       return d > 9 && d < 30;
     });

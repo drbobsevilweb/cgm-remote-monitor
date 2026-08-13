@@ -109,7 +109,7 @@ import { pickQuality } from './src/renderer/Quality.js';
 import { MeshBuilder } from './src/environment/MeshBuilder.js';
 import { buildTextures, TEXTURE_DEFAULTS } from './src/environment/Textures.js';
 import { PAL, TONES } from './src/environment/Palette.js';
-import { ARCHETYPES, buildArchetypeGeometry } from './src/enemies/Archetypes.js';
+import { ARCHETYPES, buildArchetypeGeometry, buildQueenGeometry } from './src/enemies/Archetypes.js';
 import { saveOverrides, clearOverrides } from './src/core/Overrides.js';
 
 // ---------------------------------------------------------------- state
@@ -178,7 +178,7 @@ lights.flash.castShadow = true;
 lights.flash.shadow.mapSize.set(quality.shadowMap, quality.shadowMap);
 lights.flash.shadow.bias = -0.0016;
 lights.flash.shadow.normalBias = 0.035;
-lights.nest.position.set(5.5, 1.4, -5);
+lights.queen.position.set(5.5, 1.4, -5);
 scene.add(...Object.values(lights), lights.flash.target);
 
 let built = null;
@@ -242,6 +242,38 @@ function rebuildWorld() {
     root.add(mesh);
   }
 
+  // A brood queen is not an ARCHETYPE — she is anchored, she has no AI state and
+  // her parts animate on a lay cycle rather than a gait, so she lives outside the
+  // enemy table. She still has to be editable here, because she is the creature
+  // the player spends the most time looking at.
+  if (S.models.archetype.startsWith('queen:')) {
+    const type = S.models.archetype.slice(6);
+    const parts = buildQueenGeometry(type, new Rng(1337));
+    const flesh = new THREE.MeshStandardMaterial({
+      color: 0x5a2d63, roughness: 0.42, metalness: 0.0,
+      emissive: new THREE.Color(S.palette.PAL.violet),
+      emissiveIntensity: 0.55 + S.models.accentGlow,
+    });
+    const chitin = new THREE.MeshStandardMaterial({
+      color: 0x39323f, roughness: 0.62, metalness: 0.14,
+      emissive: new THREE.Color(S.palette.PAL.violet), emissiveIntensity: 0.06,
+    });
+    matList.push(flesh, chitin);
+    const sc = S.models.scale;
+    const g2 = new THREE.Group();
+    const body = new THREE.Mesh(parts.body, flesh);
+    const hood = new THREE.Mesh(parts.hood, chitin);
+    const abd = new THREE.Mesh(parts.abdomen, flesh);
+    abd.position.set(0, parts.abdomenY, parts.abdomenZ);
+    // Held mid-cycle, sac part-filled: the pose that shows what she does.
+    abd.scale.setScalar(1.22);
+    for (const m of [body, hood, abd]) { m.castShadow = true; m.receiveShadow = true; }
+    geoms.push(parts.body, parts.hood, parts.abdomen);
+    g2.add(body, hood, abd);
+    g2.scale.setScalar(sc);
+    g2.position.set(-2.2, 0, -1.6);
+    root.add(g2);
+  } else {
   // the selected creature, so model edits are visible against the materials
   const arch = ARCHETYPES.find((a) => a.id === S.models.archetype) || ARCHETYPES[0];
   const spec = { ...arch, scale: arch.scale * S.models.scale };
@@ -276,6 +308,7 @@ function rebuildWorld() {
     m.rotation.z = rz;
     m.castShadow = true; m.receiveShadow = true;
     root.add(m);
+  }
   }
 
   built = { geoms, mats: matList, texes: [tex.steel, tex.deck, tex.painted, tex.ceramic, tex.flesh, tex.hazard] };
@@ -315,7 +348,7 @@ function applyLive() {
   const bay = S.lighting.lampIntensity * 1.45 * 1.45;
   lights.bay.intensity = bay; lights.bay2.intensity = bay;
   lights.flash.intensity = S.lighting.flashIntensity;
-  lights.nest.color.set(S.palette.PAL.violet);
+  lights.queen.color.set(S.palette.PAL.violet);
 }
 
 // ---------------------------------------------------------------- controls
@@ -391,7 +424,7 @@ const SCHEMA = {
   ],
   MODELS: [
     ['models', 'CREATURE', {
-      archetype: ['select', ARCHETYPES.map((a) => a.id)],
+      archetype: ['select', [...ARCHETYPES.map((a) => a.id), 'queen:matriarch', 'queen:brooder']],
       scale: [0.4, 3, 0.02], accentGlow: [0, 1.5, 0.01],
     }],
   ],

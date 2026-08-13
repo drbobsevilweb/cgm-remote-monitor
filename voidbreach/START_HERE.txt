@@ -1,0 +1,79 @@
+VOIDBREACH
+==========
+
+PLAY IT
+-------
+You need Node.js installed (any recent version). Then:
+
+    cd voidbreach
+    node tools/serve.mjs
+
+Open http://127.0.0.1:8099/ in a browser.
+
+There is no build step and no npm install required to play. three.js is
+vendored in vendor/. Any static web server works -- this one just disables
+caching. (Python alternative:  python3 -m http.server 8099)
+
+You cannot open index.html directly from disk: it uses ES modules, which
+browsers only load over http://.
+
+CONTROLS
+--------
+    WASD    move
+    mouse   aim
+    LMB     carbine  (no ammunition -- it overheats instead)
+    RMB     frag grenade (lobbed at the cursor)
+    SPACE   dash
+    R       vent the barrel
+    F       operator light
+
+THREE THINGS THAT ARE NOT OBVIOUS
+---------------------------------
+1. The carbine never runs out, and that is not the same as free. Every round
+   heats the barrel. About three seconds of held trigger takes it from cold to
+   the redline, and at 100% it vents ITSELF -- a flat two-second lockout you
+   did not choose. R vents it manually, and it costs less the earlier you do
+   it. The bar is bottom right. Letting go before you have to is the skill.
+
+2. Shoot the eggs. A brood queen does not spawn enemies; she lays clutches,
+   and the eggs hatch. Each egg has a bright core that grows as it comes to
+   term, so a room tells you what is about to happen to it. An egg takes two
+   rounds. What hatches out of it takes a lot more.
+
+3. She is armoured at the front. The mineral hood eats two thirds of anything
+   hitting her frontal arc -- you get sparks instead of fluid, and you can
+   hear the difference. Get behind her. Explosives ignore the hood entirely.
+
+Also: wall grilles can be shot out. Five rounds welds one shut, and the Chorus
+has permanently lost a bearing it can flank you from.
+
+Find the violet light. That is a brood queen, and she is what is producing the
+swarm. Kill her and the room empties.
+
+    http://127.0.0.1:8099/?stats=1        live profiler overlay
+    http://127.0.0.1:8099/studio.html     the material / lighting / model editor
+
+TEST IT
+-------
+Instant, no browser needed:
+
+    npm run check         dependency rules, determinism, geometry, level
+    npm run validators    31 self-tests that prove each detector CAN fail
+
+Needs a browser:
+
+    npm install --no-save playwright
+    npx playwright install chromium
+    npm run replay        the 15-beat self-play run (~4 min headless)
+    npm run gauntlet      everything, in the order that makes it mean something
+
+READ IT
+-------
+    DIRECTION.md      what it should feel and look like, and why
+                      (see 12 for queens and eggs, 13 for heat)
+    ARCHITECTURE.md   how it is put together, and the decision log
+    TEST_PLAN.md      the gates -- including 6b what the instruments caught
+                      and 6c what is still failing
+    MULTIPLAYER.md    four-player co-op: planned, costed, not started
+    STUDIO.md         the live authoring tool
+    README.md         all of the above, in more detail

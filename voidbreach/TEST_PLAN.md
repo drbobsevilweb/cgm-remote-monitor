@@ -62,28 +62,36 @@ own failure mode, the gauntlet aborts before any gameplay test runs.
 
 ### 4.1 Self-play replay (`?test=replay&seed=1337`)
 
-The scripted operator drives the game through the normal input path. All twelve beats must
+The scripted operator drives the game through the normal input path. All fifteen beats must
 complete, in order, within their time windows:
 
 | # | Beat | Assertion | Deadline (sim s) |
 |---|------|-----------|------------------|
 | 1 | Spawn Assault operator | operator alive, controllable | 1 |
 | 2 | Move through opening corridor | displacement ≥ 18 m | 20 |
-| 3 | Destroy first infestation node | `nest.destroyed` event, count 1 | 75 |
-| 4 | Fight a swarm | ≥ 14 enemies alive simultaneously, ≥ 20 killed | 120 |
-| 5 | Trigger an explosive object | `tank.detonated` event | 150 |
-| 6 | Cross a grated industrial floor | ≥ 6 m travelled on `PIT` cells | 170 |
-| 7 | Fight one Stalker | stalker damaged then killed | 200 |
-| 8 | Switch weapon / ability | secondary (frag) fired | 210 |
-| 9 | Enter a dark room | ambient luminance at player < 0.06 for ≥ 3 s | 235 |
-| 10 | Illuminate enemies with the operator light | ≥ 2 enemies inside the light cone while dark | 245 |
-| 11 | Destroy final nest | all sector nests destroyed | 330 |
-| 12 | Reach level exit | exit trigger entered | 380 |
+| 3 | Destroy an egg before it hatches | `eggDestroyed` event | 60 |
+| 4 | Overheat the barrel | a *forced* vent occurs | 75 |
+| 5 | Kill the first brood queen | `queenKilled` event, count 1 | 90 |
+| 6 | Fight a swarm | ≥ 14 enemies alive simultaneously, ≥ 20 killed | 130 |
+| 7 | Trigger an explosive object | `tankDetonated` event | 160 |
+| 8 | Cross a grated industrial floor | ≥ 6 m travelled on grating | 180 |
+| 9 | Fight one Stalker | stalker damaged then killed | 210 |
+| 10 | Switch weapon / ability | secondary (frag) fired | 220 |
+| 11 | Weld a vent shut | `ventSealed` event | 250 |
+| 12 | Enter a dark room | authored ambient level ≤ 0.12 for ≥ 3 s | 260 |
+| 13 | Illuminate enemies with the operator light | ≥ 2 enemies inside the light cone while dark | 270 |
+| 14 | Kill the final queen | all sector queens dead | 350 |
+| 15 | Reach level exit | exit trigger entered | 400 |
 
-**Gate E1:** 12/12 beats pass. Blocking.
+Beats 3, 4 and 11 are new and were added with the mechanics they test. Beat 4 in particular
+is deliberately a beat about *failing well*: the autopilot fires greedily for its first 70 s
+and lets the barrel take the decision away from it, because that is what a player does before
+they have learned the bar, and both halves of the thermal design have to be exercised.
+
+**Gate E1:** 15/15 beats pass. Blocking.
 **Gate E2:** identical seed → identical beat times (±0 frames) and identical end-state hash
 across two runs. Blocking.
-**Gate E3:** different seeds (1337, 4242, 777) all complete 12/12 — the level is not solvable
+**Gate E3:** different seeds (1337, 4242, 777) all complete 15/15 — the level is not solvable
 by luck alone. Blocking.
 
 ### 4.2 The 60-second contract (DIRECTION §2)
@@ -94,12 +102,12 @@ Measured on the replay's first 60 s of sim time:
 |----|------|-----------|
 | X1 | First enemy *seen* (in frustum, lit or silhouetted) | ≤ 12 s |
 | X2 | First damage taken by player | ≥ 14 s and ≤ 40 s (not instant, not absent) |
-| X3 | Peak simultaneous enemies before first nest dies | ≥ 10 |
-| X4 | Spawn rate exceeds player kill rate for ≥ 6 s before nest death | true |
-| X5 | First nest destroyed | ≤ 60 s |
-| X6 | Enemy count 3 s after nest death vs. 3 s before | ≤ 40% (the relief must be measurable) |
+| X3 | Peak simultaneous enemies before the first queen dies | ≥ 10 |
+| X4 | Hatch rate exceeds player kill rate for ≥ 6 s before the queen dies | true |
+| X5 | First queen killed | ≤ 90 s |
+| X6 | Enemy count 3 s after the queen dies vs. 3 s before | ≤ 40% (the relief must be measurable) |
 | X7 | Player survives the first 60 s at ≥ 25% health | true |
-| X8 | Next route revealed (bulkhead cycle event) within 10 s of nest death | true |
+| X8 | Next route revealed (bulkhead cycle event) within 10 s of the queen dying | true |
 
 **Gate E4:** X1–X8 all pass. Blocking. *This is the single most important gate in the file.*
 
@@ -110,6 +118,11 @@ Measured on the replay's first 60 s of sim time:
 | F1 | Player input → projectile spawn latency | ≤ 1 sim step (16.7 ms) |
 | F2 | Time-to-kill, Runner, carbine centre mass | 1–2 hits |
 | F3 | Time-to-kill, Bulwark frontally | > 4× its flank TTK (flanking must be *the* answer) |
+| F7 | Damage to a queen's frontal arc | ≈ 34% of the same round to her flank or rear |
+| F8 | Explosive damage to a queen | never reduced by the hood, at any angle |
+| F9 | Cold barrel to forced vent, trigger held | 28–30 rounds (3.1–3.3 s) |
+| F10 | Manual vent duration | strictly increasing in heat; ≥ 0.5 s and < the forced 2.15 s at every heat below 1.0 |
+| F11 | Killing a queen destroys her unhatched clutch | 100% |
 | F4 | Player top speed reached from standstill | ≤ 0.16 s (weighty, not sluggish) |
 | F5 | Dash i-frame window | 0.22 s ± 1 frame |
 | F6 | Every hit produces impact VFX + audio + enemy flinch | 100% of sampled hits |
@@ -117,7 +130,7 @@ Measured on the replay's first 60 s of sim time:
 ## 5. VISUAL GATES
 
 Captured from **fresh page loads** at canonical states (`?shot=`), 1600×900:
-`OPENING, FIRST_COMBAT, GRATING, DARK_CORRIDOR, SWARM, NEST, EXPLOSION, ELITE, BOSS_REVEAL`.
+`OPENING, FIRST_COMBAT, GRATING, DARK_CORRIDOR, SWARM, QUEEN, CLUTCH, EXPLOSION, ELITE, BOSS_REVEAL`.
 
 ### 5.1 Readability
 
@@ -193,6 +206,13 @@ these were found by looking at the game; all were found by an instrument.
 | Replay harness | Pickup collection ran in `present()`, not `step()` — sampled once per rendered frame | Invisible at 60 fps; the operator walked through medkits in the harness, and a player at 20 fps would too |
 | Replay harness | Unreachable stragglers survived forever | A room could never feel cleared |
 | Replay harness | The harness itself could hang instead of reporting | A hang is not a failure report |
+| Replay harness | **Every wall vent in the sector was authored onto a floor cell**, so no grille geometry was ever emitted and there was nothing there to shoot — the Chorus flanked out of thin air | The spawn points worked, so the encounters played correctly. Nobody looks at a wall and notices a grille that was never there. Found only when the vents were made destructible and the test asked one to break. |
+| Replay harness | The stall watchdog counted kills as progress, so an operator pinned against a locked bulkhead farming an endless vent wave looked busy for 350 s | Every number on the report was rising. The run was, by every metric it had, going well. |
+| Autopilot goal logic | Chasing weapon pickups pulled the run off a queen whose death was the only thing that unlocked the door it then stood against | A supply detour is individually reasonable at every step |
+| Replay harness | The stall key bucketed the *current* distance to the objective, so an operator oscillating across a bucket boundary minted a fresh "progress" mark every two seconds. Now keyed on the closest it has ever been. | Oscillation is indistinguishable from movement in any single sample |
+| Replay harness | A supply crate sitting behind a machine is routed to by the flow field — which snaps to the nearest OPEN cell — and then sits two metres outside pickup range forever | The operator is walking, arriving, and standing next to the thing it wants |
+| `seal_vent` beat | Line of sight to a vent was always false: a vent cell is *solid*, so a ray aimed at its centre is stopped by the vent itself | The vents are visible on screen. The test was asking the wrong question of the grid. |
+| Capture tool | **Playwright silently ignored the per-call `timeout` option** and applied the 30 s context default to every `waitForFunction`. Under a software rasteriser 30 s is about 1.5 s of simulation, so `OPENING` was the only canonical state physically reachable and everything else "timed out". | The report said TIMEOUT, which reads as "the game did not get there" rather than "the harness never waited". §6c blamed the workload for two weeks. |
 
 ## 6c. KNOWN OPEN FAILURES
 
@@ -201,15 +221,17 @@ than a gate quietly relaxed until it passes.
 
 | Gate | State | Detail |
 |------|-------|--------|
-| **P7 shader compilations after prewarm** | **FAILING — 13** | `prewarm()` renders one off-screen frame containing every archetype, both nest types and the VFX batches, but three.js still compiles ~13 programs during the first seconds of play. The likely remainder is shadow-pass program variants and material permutations that only appear once a light count changes. The instrument is correct and is doing its job; the prewarm is incomplete. Fix is to render the prewarm frame under the worst-case light count with the shadow pass enabled, and to re-run `renderer.compile` after the first light-pool allocation. |
+| **P7 shader compilations after prewarm** | **FAILING — 15** | `prewarm()` renders one off-screen frame containing every archetype, both queen types, an egg (shell and core) and the VFX batches, but three.js still compiles ~15 programs during the first seconds of play. The likely remainder is shadow-pass program variants and material permutations that only appear once a light count changes. The instrument is correct and is doing its job; the prewarm is incomplete. Fix is to render the prewarm frame under the worst-case light count with the shadow pass enabled, and to re-run `renderer.compile` after the first light-pool allocation. |
 | E2 determinism (same seed → identical end state) | **UNVERIFIED** | The end-state hash is computed and emitted (`endStateHash`), and the RNG's own determinism is proven in `validate-validators.mjs`, but a same-seed A/B replay pair has not been run end to end. Two ~4-minute headless runs are required. |
 | E3 multi-seed (1337 / 4242 / 777) | **UNVERIFIED** | Only seed 1337 has been run to completion. |
-| Visual gates on the full state set | **PARTIAL** | Only `OPENING` has been captured and measured since the light-colour correction (13/14). `NEST`, `GRATING`, `DARK_CORRIDOR`, `SWARM`, `EXPLOSION`, `ELITE` are implemented and capturable but not yet measured against the current build. |
-| Boss / THE DEEP FORM | **NOT BUILT** | The Reactor Antechamber exists, is reachable and is the exit; the large final organism described in DIRECTION is not implemented. The slice currently ends on the fourth node plus the reactor arena. |
+| Visual gates on the full state set | **PARTIAL** | The reason this entry existed at all turned out to be the capture-tool timeout bug above, not the workload. With that fixed, `QUEEN`, `CLUTCH`, `FIRST_COMBAT`, `GRATING` and `SWARM` capture; `DARK_CORRIDOR`, `EXPLOSION`, `ELITE` and `BOSS_REVEAL` have not been re-run since. Measuring the captured set against `validate.mjs` is the next gauntlet round, not a completed one. |
+| F7–F11 combat invariants | **VERIFIED BY PROBE, NOT GATED** | Queen frontal reduction (34% of a flank round), explosive immunity to the hood, cold-to-forced-vent round count, and clutch-dies-with-queen were each measured directly against the running game. They are not yet wired into an automated gate, so they are checks that were performed rather than checks that are enforced. |
+| Boss / THE DEEP FORM | **NOT BUILT** | The Reactor Antechamber exists, is reachable and is the exit; the large final organism described in DIRECTION is not implemented. The slice currently ends on the fourth queen plus the reactor arena. |
+| Four-player co-op | **NOT STARTED** | Planned and costed in MULTIPLAYER.md. Nothing in the shipped code is netcode, and the singleton `player` reference appears 64 times outside `src/player/`. The blocking piece is enemy target selection for a squad, not the transport. |
 
 ## 7. DEFINITION OF DONE (vertical slice)
 
-- V0, S1–S4, E1–E4, F1–F6 pass.
+- V0, S1–S4, E1–E4, F1–F11 pass.
 - All V/C/P gates pass at 1600×900.
 - One operator, one large sector, ≥ 3 enemy types + 1 elite + boss encounter, 2 nest types,
   4 weapons/abilities, 1 locked bulkhead objective, 1 large final encounter.

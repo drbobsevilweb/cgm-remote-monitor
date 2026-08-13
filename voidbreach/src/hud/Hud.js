@@ -32,8 +32,8 @@ export class Hud {
     });
     events.on('enemyDied', () => { this.hitMarker = Math.min(1, this.hitMarker + 0.35); });
     events.on('pickup', (e) => { this.pickupFlash = 1; this.push(PICKUP_TEXT[e.kind] || 'RECOVERED', 'pickup', 1.8); });
-    events.on('nestDestroyed', (e) => {
-      this.push(e.remaining > 0 ? `BREACH-NODE DESTROYED — ${e.remaining} REMAINING` : 'SECTOR PURGED', 'good', 4);
+    events.on('queenKilled', (e) => {
+      this.push(e.remaining > 0 ? `BROOD QUEEN DOWN — ${e.remaining} REMAINING` : 'SECTOR PURGED', 'good', 4);
     });
     events.on('doorState', (e) => {
       if (e.state === 'unlocked') this.push(`${e.label || 'BULKHEAD'} — RELEASED`, 'good', 3.5);
@@ -91,26 +91,63 @@ export class Hud {
     c.fillStyle = state.health01 < 0.3 ? '#ff6a5a' : '#dfe8f2';
     c.fillText(String(Math.ceil(state.health)), bx + barW + 14, by + barH);
 
-    // ------------------------------------------------------ ammo (bottom right)
+    // ------------------------------------------------------ heat (bottom right)
+    // There is no round count because there are no rounds. The question this
+    // has to answer, sixty times a fight, is "can I keep holding this trigger",
+    // so the bar is the readout and the numbers are secondary.
     const ax = w - pad;
+    const hw = 190, hh = 12;
+    const hx = ax - hw, hy = h - pad - 30;
     c.textAlign = 'right';
-    c.font = F(42, 700);
-    c.fillStyle = state.reloading ? '#ffb45a' : (state.ammo <= 6 ? '#ff6a5a' : '#eef4fb');
-    c.fillText(String(state.ammo).padStart(2, '0'), ax, h - pad - 18);
-    c.font = F(15, 500);
-    c.fillStyle = 'rgba(200,214,230,0.55)';
-    c.fillText(` / ${state.reserve}`, ax, h - pad + 2);
-    c.font = F(11, 600);
-    c.fillStyle = 'rgba(200,214,230,0.42)';
-    c.fillText(state.weaponName, ax, h - pad - 62);
 
-    if (state.reloading) {
-      const rw = 132;
-      c.fillStyle = 'rgba(255,180,90,0.22)';
-      c.fillRect(ax - rw, h - pad - 78, rw, 3);
-      c.fillStyle = '#ffb45a';
-      c.fillRect(ax - rw, h - pad - 78, rw * state.reloadProgress, 3);
+    const heat = clamp01(state.heat01 || 0);
+    c.fillStyle = 'rgba(20,26,34,0.75)';
+    c.fillRect(hx, hy, hw, hh);
+
+    if (state.venting) {
+      // Venting reads as a different colour and fills the OTHER way, so a vent
+      // can never be mistaken for the barrel heating back up.
+      c.fillStyle = 'rgba(95,216,255,0.20)';
+      c.fillRect(hx, hy, hw, hh);
+      c.fillStyle = state.overheated ? '#ff8a3d' : '#5fd8ff';
+      c.fillRect(hx, hy, hw * clamp01(state.ventProgress || 0), hh);
+    } else {
+      const grad = c.createLinearGradient(hx, 0, hx + hw, 0);
+      grad.addColorStop(0, '#5fd8ff');
+      grad.addColorStop(0.55, '#ffb45a');
+      grad.addColorStop(1, '#ff3a2e');
+      c.fillStyle = grad;
+      c.fillRect(hx, hy, hw * heat, hh);
+      if (state.hot) {
+        // the last stretch pulses: this is the "let go now" signal
+        c.save();
+        c.globalAlpha = 0.35 + 0.35 * Math.sin(state.time * 14);
+        c.fillStyle = '#ff3a2e';
+        c.fillRect(hx + hw * 0.78, hy - 2, hw * 0.22, hh + 4);
+        c.restore();
+      }
     }
+    // the redline tick, so "how much is left" is a position not a guess
+    c.fillStyle = 'rgba(255,58,46,0.85)';
+    c.fillRect(hx + hw * 0.78, hy - 3, 2, hh + 6);
+    c.strokeStyle = 'rgba(200,214,230,0.30)';
+    c.lineWidth = 1;
+    c.strokeRect(hx + 0.5, hy + 0.5, hw - 1, hh - 1);
+
+    c.font = F(11, 600);
+    c.fillStyle = state.venting
+      ? (state.overheated ? '#ff8a3d' : '#5fd8ff')
+      : (state.hot ? '#ff6a5a' : 'rgba(200,214,230,0.55)');
+    c.fillText(state.venting
+      ? (state.overheated ? 'OVERHEAT — VENTING' : 'VENTING')
+      : `${Math.round(heat * 100)}% ${state.coolBoost ? '· COOLANT' : '· R TO VENT'}`,
+      ax, hy - 8);
+
+    c.font = F(state.charges !== null ? 20 : 13, 700);
+    c.fillStyle = state.charges !== null ? '#5fd8ff' : 'rgba(200,214,230,0.5)';
+    c.fillText(state.charges !== null
+      ? `${state.weaponName}  ×${state.charges}`
+      : state.weaponName, ax, h - pad - 2);
 
     // grenades + dash, as discrete pips: countable at a glance
     c.textAlign = 'right';
@@ -134,23 +171,30 @@ export class Hud {
       c.fillText(this.objective, pad, pad + 28);
     }
 
-    // nodes remaining — the loop's scoreboard
-    if (state.nestsTotal > 0) {
+    // queens remaining — the loop's scoreboard
+    if (state.queensTotal > 0) {
       const nx = pad, ny = pad + 46;
-      for (let i = 0; i < state.nestsTotal; i++) {
-        const dead = i >= state.nestsRemaining;
+      for (let i = 0; i < state.queensTotal; i++) {
+        const dead = i >= state.queensRemaining;
         c.fillStyle = dead ? 'rgba(194,59,216,0.22)' : '#c23bd8';
         c.beginPath();
         c.arc(nx + 7 + i * 19, ny, 5.5, 0, Math.PI * 2);
         dead ? c.stroke() : c.fill();
         if (dead) { c.strokeStyle = 'rgba(194,59,216,0.35)'; c.stroke(); }
       }
+      if (state.eggsAlive > 0) {
+        c.font = F(11, 600);
+        c.textAlign = 'left';
+        c.fillStyle = 'rgba(194,59,216,0.8)';
+        c.fillText(`${state.eggsAlive} EGG${state.eggsAlive === 1 ? '' : 'S'} INCUBATING`,
+          nx + state.queensTotal * 19 + 10, ny + 4);
+      }
     }
 
-    // ------------------------------------------------- nest compass (the tell)
-    if (state.nestDir) {
+    // ------------------------------------------------ queen compass (the tell)
+    if (state.queenDir) {
       const cx = w / 2, cy = h / 2;
-      const a = Math.atan2(state.nestDir.z, state.nestDir.x);
+      const a = Math.atan2(state.queenDir.z, state.queenDir.x);
       const r = Math.min(w, h) * 0.30;
       c.save();
       c.globalAlpha = 0.30 + 0.20 * Math.sin(state.time * 2.4);
@@ -260,7 +304,7 @@ export class Hud {
     c.fillText(title, w / 2, h / 2 - 10);
     c.font = F(14, 500);
     c.fillStyle = 'rgba(220,232,244,0.75)';
-    c.fillText(`CHORUS DESTROYED ${state.kills}   ·   NODES ${state.nestsTotal - state.nestsRemaining}/${state.nestsTotal}   ·   ${fmtTime(state.time)}`,
+    c.fillText(`CHORUS DESTROYED ${state.kills}   ·   QUEENS ${state.queensTotal - state.queensRemaining}/${state.queensTotal}   ·   ${fmtTime(state.time)}`,
       w / 2, h / 2 + 24);
     c.fillStyle = 'rgba(220,232,244,0.5)';
     c.fillText('PRESS R TO REDEPLOY', w / 2, h / 2 + 54);
@@ -279,5 +323,6 @@ const TONE_COLOUR = {
 };
 
 const PICKUP_TEXT = {
-  ammo: 'AMMUNITION', medkit: 'MEDICAL KIT', armour: 'ARMOUR PLATE', flare: 'FLARE',
+  arc: 'ARC LANCE CELL', coolant: 'COOLANT CANISTER',
+  medkit: 'MEDICAL KIT', armour: 'ARMOUR PLATE', flare: 'FLARE',
 };

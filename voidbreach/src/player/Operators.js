@@ -69,13 +69,25 @@ export const WEAPON_SPECS = {
     short: 'CARBINE',
     damage: 17,
     rpm: 545,
-    magazine: 32,
-    reserve: 384,
-    reloadTime: 1.85,
+    // --- thermal cycle. The carbine draws from the suit's cell, so rounds are
+    // not the constraint; the barrel is. Continuous fire is ALWAYS available and
+    // ALWAYS punished, which is a different decision from "do I have ammo": it
+    // is asked every second of every fight rather than once per magazine.
+    heatPerShot: 0.0345,    // ~29 rounds, ~3.2 s, from cold to a forced vent
+    coolRate: 0.46,         // fraction per second once it starts cooling
+    coolDelay: 0.42,        // seconds after the last round before cooling starts
+    forcedVent: 2.15,       // lockout when the barrel takes the decision from you
+    ventBase: 0.50,         // manual vent: this, plus...
+    ventPerHeat: 1.45,      // ...this much per unit of heat you let build
+    ventFloor: 0.10,        // below this there is nothing worth venting
+    warnHeat: 0.78,         // where the HUD and the audio start telling you
+    reloadTime: 1.85,       // legacy: vent stage timings are derived from this
     spread: 0.014,          // radians, hip
     spreadPerShot: 0.011,
     spreadMax: 0.075,
     spreadRecover: 0.10,
+    // The barrel loses accuracy as it heats, on top of sustained-fire bloom.
+    spreadPerHeat: 0.030,
     projectileSpeed: 118,
     recoil: 0.055,
     kick: 0.10,
@@ -98,3 +110,33 @@ export const WEAPON_SPECS = {
     fuse: 1.35,
   },
 };
+
+/**
+ * Special weapons are the one place ammunition still exists.
+ *
+ * The carbine is unlimited because "am I out" is a bad question to ask a player
+ * sixty times a run. A special is limited because it is the opposite kind of
+ * object: it is a resource you found, and the interesting question about a
+ * resource you found is when to spend it. Charges are finite, do not regenerate,
+ * and produce no heat — so picking one up is also a moment of thermal relief.
+ *
+ * When the charges run out the operator falls back to the carbine automatically.
+ * There is no stow control: a special is a temporary state, not a loadout slot.
+ */
+export const SPECIAL_SPECS = {
+  arclance: {
+    id: 'arclance',
+    name: 'AL-9 ARC LANCE',
+    short: 'ARC LANCE',
+    damage: 82,
+    rpm: 148,
+    charges: 22,
+    pierce: 3,            // it goes through a queue of runners, not into one
+    projectileSpeed: 165,
+    spread: 0.004,
+    recoil: 0.16,
+    kick: 0.26,
+    colour: 0x5fd8ff,
+  },
+};
+

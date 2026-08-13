@@ -46,7 +46,7 @@ export class Lighting {
       this.pool.push(l);
     }
 
-    this.emitters = [];      // persistent: nests, flares, fires
+    this.emitters = [];      // persistent: queens, flares, fires
     this.transients = [];    // muzzle flashes, impacts, explosions
     this.freeTransients = [];
     for (let i = 0; i < 48; i++) this.freeTransients.push({ active: false });

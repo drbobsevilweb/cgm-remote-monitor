@@ -27,15 +27,16 @@ reaches into another subsystem's internals.
 | **CORE** | Clock, fixed-step loop, seeded RNG, event bus, pools, spatial hash, math | Know about gameplay |
 | **INPUT** | Keyboard/mouse state → `InputFrame` (an intent struct) | Touch the world |
 | **PLAYER** | Operator state, movement, health/armour, abilities, the operator light's *intent* | Own weapon internals, own the camera |
-| **WEAPONS** | Weapon definitions, fire timing, recoil, reload, ammo, projectile pool, damage application | Know which operator holds it |
+| **WEAPONS** | Weapon definitions, fire timing, recoil, spread, the thermal cycle, special-weapon charges, projectile pool, damage application | Know which operator holds it |
 | **ENEMIES** | Enemy instances, AI states, steering, animation state, damage response, death | Decide *when* to spawn |
-| **DIRECTOR** | Spawn budget, pressure curve, nest logic, encounter script, beats | Own enemy behaviour |
+| **BROODS** | Queen state, health and armour arc, the lay cycle, the egg pool, incubation and hatching | Decide *whether* it is allowed to lay (DIRECTOR gates that) |
+| **DIRECTOR** | Pressure curve, relief windows, flanking waves, encounter script, objectives, beats | Own enemy or queen behaviour |
 | **LEVEL** | Sector data, collision grid, nav grid + flow fields, rooms, doors, objectives, spawn points | Build meshes |
 | **ENVIRONMENT** | All world geometry + materials + procedural textures, props, destructibles, grating | Own gameplay state (it *reads* LEVEL) |
 | **LIGHTING** | Light budget & pooling, light events, flashlight, shadow config, light pools/decals | Be edited by any other subsystem directly |
 | **VFX** | Particles, decals, tracers, impacts, ruptures, screen effects | Apply damage |
 | **AUDIO** | WebAudio graph, synthesis, spatialisation, music state, room tone | Poll gameplay; it is *told* |
-| **HUD** | 2D canvas overlay, objective/ammo/health readout, damage direction, messages | Mutate gameplay |
+| **HUD** | 2D canvas overlay, objective/heat/health readout, damage direction, messages | Mutate gameplay |
 | **RENDERER** | three.js renderer, render targets, post chain, camera rig, quality tiers | Contain gameplay logic |
 | **QA** | Profiler, deterministic replay, self-play scripts, canonical camera states, validators | Be required for the game to run |
 
@@ -49,6 +50,7 @@ LIGHTING, VFX, AUDIO, HUD, RENDERER ← CORE (+ LEVEL for LIGHTING/VFX placement
 WEAPONS ← CORE, LEVEL
 PLAYER  ← CORE, LEVEL, WEAPONS
 ENEMIES ← CORE, LEVEL
+BROODS   ← CORE, LEVEL, ENEMIES, ENVIRONMENT (geometry only)
 DIRECTOR ← CORE, LEVEL, ENEMIES
 GAME (composition root) ← all of the above
 ```
@@ -64,7 +66,7 @@ the build on any edge not in the table above.
 them in dependency order, wires events, and owns the frame order:
 
 ```
-INPUT.sample → [fixed steps: PLAYER, WEAPONS, ENEMIES, DIRECTOR, LEVEL doors, VFX sim]
+INPUT.sample → [fixed steps: PLAYER, WEAPONS, ENEMIES, BROODS, DIRECTOR, LEVEL doors, VFX sim]
              → interpolate → LIGHTING.update → ENVIRONMENT.update → RENDERER.render
              → HUD.draw → AUDIO.flush → PROFILER.sample
 ```
@@ -176,3 +178,16 @@ voidbreach/
 | 6 | No auto-exposure | Auto-exposure defeats authored darkness and makes captures non-comparable | Locked |
 | 7 | Zero binary assets | Determinism, load time, and no asset-pipeline complexity | Locked |
 | 8 | Solo play, no squad AI | Brief allows dropping squad AI if it harms quality. Four-operator squad AI with switching would consume the budget that makes the *slice* excellent, and mediocre allies would dilute the pressure→agency→relief loop that is the whole point. Operators 2–4 are designed and documented but the slice ships one. | Locked for slice |
+| 9 | Queens and eggs, not spawners | An abstract spawner gives the room no way to forecast itself and offers the player exactly one intervention. A visible incubating clutch gives a second, cheaper answer under pressure, gives the frag a specific purpose, and makes the relief beat total because unhatched eggs die with the queen. Full rationale in DIRECTION §12. | Locked |
+| 10 | Heat, not ammunition | "Am I out" is answered by a number and produces two non-decisions (full magazine = free, empty magazine = spectator). "How long can I hold this" is answered continuously by the player's finger against what is in front of them. Specials keep charges precisely because they ask the *other* question — when to spend something you found. DIRECTION §13. | Locked |
+| 11 | Vents are destructible | The player had no way to make a permanent change to the level. Welding a grille shut removes a bearing the Chorus can arrive from, for the rest of the run, because the player chose to spend heat on it. | Locked |
+| 12 | Co-op is a planned future, not a hedge | Four-player co-op is wanted (see MULTIPLAYER.md). It is *not* being pre-built: the singleton `player` reference is load-bearing in about a dozen places and generalising it before the netcode model is chosen would produce speculative abstraction that the real requirement then contradicts. What IS being protected is the substrate that makes it possible — fixed timestep, seeded RNG with named streams, and an `InputFrame` that is already the only way anything reaches the simulation. | Open |
+
+---
+
+## 9. WHY OPERATORS 2–4 STILL DO NOT PLAY
+
+Decision 8 remains in force for the slice. The relevant change is that the *reason* has moved:
+it is no longer "squad AI would dilute the loop" alone, it is now also that the four operator
+archetypes are the natural co-op roster (MULTIPLAYER.md), and building them as AI companions
+first would be work thrown away. They stay authored data and unbuilt behaviour.

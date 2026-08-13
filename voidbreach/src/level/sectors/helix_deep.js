@@ -65,35 +65,52 @@ export const HELIX_DEEP = {
     // first node cannot be skipped; afterwards the player has a real choice of
     // route into Processing (habitation: supplies and space / trunk: fast and blind).
     { id: 'd_trunk',  kind: 'service',  x: 58, z: 12, w: 4, h: 1, axis: 'z', room: 'trunk',
-      locked: true, unlockOn: 'nest:n_cargo', label: 'SERVICE TRUNK 7-N' },
+      locked: true, unlockOn: 'queen:q_cargo', label: 'SERVICE TRUNK 7-N' },
     // B1: opens when the cargo node dies — this is the "next route" of the 60 s contract.
     { id: 'd_hab',    kind: 'bulkhead', x: 37, z: 24, w: 4, h: 1, axis: 'z', room: 'habspur',
-      locked: true, unlockOn: 'nest:n_cargo', label: 'BULKHEAD 7-2' },
+      locked: true, unlockOn: 'queen:q_cargo', label: 'BULKHEAD 7-2' },
     { id: 'd_mess',   kind: 'service',  x: 22, z: 35, w: 1, h: 3, axis: 'x', room: 'mess' },
     { id: 'd_link',   kind: 'bulkhead', x: 49, z: 35, w: 1, h: 4, axis: 'x', room: 'link', label: 'PROCESS ACCESS' },
     { id: 'd_out',    kind: 'service',  x: 52, z: 50, w: 4, h: 1, axis: 'z', room: 'procout' },
     // B2: the objective lock. Needs the sector purged.
     { id: 'd_gate',   kind: 'bulkhead', x: 57, z: 53, w: 1, h: 3, axis: 'x', room: 'gate',
-      locked: true, unlockOn: 'allNests', label: 'PRESSURE LOCK 7-C' },
+      locked: true, unlockOn: 'allQueens', label: 'PRESSURE LOCK 7-C' },
   ],
 
   // --- INFESTATION -------------------------------------------------------
-  // type: 'brood' (wall-mounted sack) | 'colony' (floor/vent colony)
-  nests: [
-    // Deliberately tough and fast-breeding: the player must arrive INTO pressure,
-    // not clear the room and then poke a sack. Tuned against gates X3/X4/X6.
-    { id: 'n_cargo', type: 'brood',  x: 40, z: 4,  room: 'cargo', hp: 430, face: 'z-',
-      budget: { rate: 0.8, max: 24, burst: 14, mix: ['runner', 'runner', 'runner', 'spitter'] } },
-    { id: 'n_proc_a', type: 'colony', x: 53, z: 29, room: 'proc', hp: 340, face: 'z-',
-      budget: { rate: 1.25, max: 16, burst: 4, mix: ['runner', 'runner', 'stalker', 'bulwark'] } },
-    { id: 'n_proc_b', type: 'brood',  x: 76, z: 43, room: 'proc', hp: 380, face: 'x+',
-      budget: { rate: 1.15, max: 16, burst: 4, mix: ['runner', 'spitter', 'spitter', 'stalker'] } },
-    { id: 'n_pump',   type: 'colony', x: 12, z: 57, room: 'pump', hp: 340, face: 'z+',
-      budget: { rate: 1.15, max: 11, burst: 5, mix: ['stalker', 'runner', 'stalker', 'runner'] } },
-  ],
+  // A brood queen is anchored where her chamber was breached. She does not
+  // spawn the Chorus directly: she lays eggs, and the eggs hatch. Budget keys:
+  //   rate     seconds between eggs
+  //   incubate seconds an egg takes to come to term
+  //   eggs     unhatched eggs she will keep on the deck at once
+  //   max      living children she will keep in the world
+  //   clutch   eggs owed by a convulsion (on waking, and at 2/3 and 1/3 health)
+  //   mix      what hatches, sampled per egg
+  //
+  // type: 'matriarch' (larger, hooded, slower cycle) | 'brooder'
+  queens: [
+    // Rates are the OLD spawner rates, not faster ones. Incubation delays the
+    // pipeline once; it does not reduce steady-state throughput, and an egg
+    // buffer saturates a room far better than a spawner ever did — the first
+    // tuning pass shortened the cycle to "compensate" and drove peak population
+    // from 15 to 23 and the operator from 80 health to dead.
+    { id: 'q_cargo', type: 'matriarch', x: 40, z: 4, room: 'cargo', hp: 430, face: 'z-',
+      budget: { rate: 0.82, incubate: 2.1, eggs: 7, max: 18, clutch: 6, wake: 8,
+        mix: ['runner', 'runner', 'runner', 'spitter'] } },
+    { id: 'q_proc_a', type: 'brooder', x: 53, z: 29, room: 'proc', hp: 340, face: 'z-',
+      budget: { rate: 1.25, incubate: 2.4, eggs: 6, max: 14, clutch: 4, wake: 4,
+        mix: ['runner', 'runner', 'stalker', 'bulwark'] } },
+    { id: 'q_proc_b', type: 'matriarch', x: 76, z: 43, room: 'proc', hp: 380, face: 'x+',
+      budget: { rate: 1.15, incubate: 2.4, eggs: 6, max: 14, clutch: 4, wake: 4,
+        mix: ['runner', 'spitter', 'spitter', 'stalker'] } },
+    { id: 'q_pump', type: 'brooder', x: 12, z: 57, room: 'pump', hp: 340, face: 'z+',
+      budget: { rate: 1.15, incubate: 2.2, eggs: 5, max: 10, clutch: 5, wake: 5,
+        mix: ['stalker', 'runner', 'stalker', 'runner'] } },
+    ],
 
-  // Wall vents: enemy ingress the player cannot use. Placed to enable flanking
-  // from outside the firing arc, never directly on top of the player.
+  // Wall vents: Chorus ingress the player cannot use. Placed to enable flanking
+  // from outside the firing arc, never directly on top of the player. Each is a
+  // grille with its own health — shoot one out and it is welded shut for good.
   vents: [
     { x: 28, z: 12, room: 'cargo', face: 'x-' },
     { x: 45, z: 23, room: 'cargo', face: 'z+' },
@@ -145,13 +162,13 @@ export const HELIX_DEEP = {
     { t: 'lamp',      x: 51, z: 5 }, { t: 'lamp', x: 31, z: 21 },
     { t: 'lamp',      x: 41, z: 22 }, { t: 'lamp', x: 51, z: 21 },
     { t: 'barricade', x: 46, z: 23, rot: 0 },
-    { t: 'ammo',      x: 34, z: 21 }, { t: 'medkit', x: 50, z: 8 }, { t: 'ammo', x: 45, z: 6 },
+    { t: 'arc',      x: 34, z: 21 }, { t: 'medkit', x: 50, z: 8 }, { t: 'coolant', x: 45, z: 6 },
     { t: 'corpse',    x: 47, z: 19, rot: 2.2 },
     { t: 'sign',      x: 39, z: 23, text: 'HAB 7-2' },
 
     // CARGO CONTROL — the reward for looking sideways.
     { t: 'console',  x: 58, z: 6, rot: 0 }, { t: 'console', x: 60, z: 6, rot: 0 },
-    { t: 'ammo',     x: 62, z: 9 }, { t: 'armour', x: 58, z: 10 },
+    { t: 'arc',     x: 62, z: 9 }, { t: 'armour', x: 58, z: 10 },
     { t: 'lamp',     x: 60, z: 8 }, { t: 'corpse', x: 61, z: 10, rot: 0.4 },
 
     // SERVICE TRUNK — dim, narrow, a stalker route.
@@ -171,7 +188,7 @@ export const HELIX_DEEP = {
     { t: 'barricade', x: 31, z: 36, rot: 1.5708 },
     { t: 'barricade', x: 31, z: 39, rot: 1.5708 },
     { t: 'locker',   x: 28, z: 33, rot: 0 }, { t: 'locker', x: 35, z: 42, rot: 3.14 },
-    { t: 'medkit',   x: 27, z: 41 }, { t: 'ammo', x: 40, z: 41 }, { t: 'ammo', x: 24, z: 33 },
+    { t: 'medkit',   x: 27, z: 41 }, { t: 'coolant', x: 40, z: 41 }, { t: 'arc', x: 24, z: 33 },
     { t: 'lamp',     x: 27, z: 35 }, { t: 'lamp', x: 36, z: 35 }, { t: 'lamp', x: 31, z: 41 },
     { t: 'corpse',   x: 33, z: 37, rot: 2.9 }, { t: 'corpse', x: 30, z: 40, rot: 0.2 },
     { t: 'tank',     x: 42, z: 40 },
@@ -191,7 +208,7 @@ export const HELIX_DEEP = {
     { t: 'lamp',     x: 53, z: 27 }, { t: 'lamp', x: 63, z: 27 }, { t: 'lamp', x: 73, z: 27 },
     { t: 'lamp',     x: 53, z: 48 }, { t: 'lamp', x: 63, z: 48 }, { t: 'lamp', x: 75, z: 40 },
     { t: 'lamp',     x: 62, z: 37 },
-    { t: 'ammo',     x: 75, z: 47 }, { t: 'ammo', x: 51, z: 30 }, { t: 'armour', x: 76, z: 34 },
+    { t: 'coolant',     x: 75, z: 47 }, { t: 'arc', x: 51, z: 30 }, { t: 'armour', x: 76, z: 34 },
     { t: 'medkit',   x: 62, z: 44 }, { t: 'medkit', x: 53, z: 46 },
     { t: 'console',  x: 51, z: 34, rot: -1.5708 },
     { t: 'corpse',   x: 66, z: 46, rot: 0.8 },
@@ -205,7 +222,7 @@ export const HELIX_DEEP = {
     { t: 'lamp',     x: 39, z: 52 },
     { t: 'lamp',     x: 48, z: 56, broken: true },
     { t: 'corpse',   x: 37, z: 55, rot: 1.4 },
-    { t: 'ammo',     x: 43, z: 54 }, { t: 'medkit', x: 30, z: 54 }, { t: 'armour', x: 51, z: 55 },
+    { t: 'coolant',     x: 43, z: 54 }, { t: 'medkit', x: 30, z: 54 }, { t: 'armour', x: 51, z: 55 },
     { t: 'flare',    x: 22, z: 55 },
 
     // PUMP HOUSE — dark, tall, a sump below the grating.
@@ -213,7 +230,7 @@ export const HELIX_DEEP = {
     { t: 'pump',     x: 17, z: 57, rot: 3.14 },
     { t: 'lamp',     x: 14, z: 48, broken: true }, { t: 'lamp', x: 11, z: 58 },
     { t: 'tank',     x: 18, z: 52 },
-    { t: 'medkit',   x: 9,  z: 58 }, { t: 'ammo', x: 18, z: 59 }, { t: 'ammo', x: 11, z: 48 }, { t: 'medkit', x: 17, z: 59 },
+    { t: 'medkit',   x: 9,  z: 58 }, { t: 'arc', x: 18, z: 59 }, { t: 'coolant', x: 11, z: 48 }, { t: 'medkit', x: 17, z: 59 },
     { t: 'console',  x: 13, z: 47, rot: 0 },
 
     // REACTOR ANTECHAMBER — the arena. Sodium heat, structure to break line of sight.
@@ -221,7 +238,7 @@ export const HELIX_DEEP = {
     { t: 'pylon',    x: 72, z: 55 }, { t: 'pylon', x: 72, z: 59 },
     { t: 'tank',     x: 60, z: 53 }, { t: 'tank', x: 77, z: 61 }, { t: 'tank', x: 68, z: 61 },
     { t: 'lamp',     x: 60, z: 57 }, { t: 'lamp', x: 68, z: 53 }, { t: 'lamp', x: 76, z: 57 },
-    { t: 'ammo',     x: 59, z: 61 }, { t: 'ammo', x: 79, z: 53 }, { t: 'medkit', x: 67, z: 57 },
+    { t: 'arc',     x: 59, z: 61 }, { t: 'coolant', x: 79, z: 53 }, { t: 'medkit', x: 67, z: 57 },
     { t: 'armour',   x: 74, z: 61 },
     { t: 'lift',     x: 80, z: 57 },
   ],
@@ -232,8 +249,8 @@ export const HELIX_DEEP = {
 
   objectives: [
     { id: 'o_start', text: 'REACH CARGO HALL A', kind: 'reach', room: 'cargo' },
-    { id: 'o_node1', text: 'DESTROY THE BREACH-NODE', kind: 'nest', nest: 'n_cargo' },
-    { id: 'o_purge', text: 'PURGE THE SECTOR — NODES REMAINING: {n}', kind: 'nests' },
+    { id: 'o_node1', text: 'KILL THE BROOD QUEEN', kind: 'queen', queen: 'q_cargo' },
+    { id: 'o_purge', text: 'PURGE THE SECTOR — QUEENS REMAINING: {n}', kind: 'queens' },
     { id: 'o_exit',  text: 'REACH THE REACTOR LIFT', kind: 'reach', room: 'reactor' },
   ],
 

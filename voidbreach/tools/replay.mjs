@@ -14,8 +14,8 @@ while (Date.now()-t0 < timeoutMs) {
   const r = await p.evaluate(()=>window.__VOIDBREACH_RESULT__ || null);
   if (r) { last=r; break; }
   const prog = await p.evaluate(()=>{ const h=window.__HARNESS; const g=window.__GAME;
-    return h? {t:+h.time.toFixed(0), beats:[...h.beats.values()].filter(x=>x.done).length, kills:g.stats.kills, alive:g.enemies.aliveNow, hp:+g.player.health.toFixed(0), nests:g.nests.remaining, room:h.roomId()}:null; });
-  if (prog) process.stderr.write(`t=${prog.t}s beats=${prog.beats}/12 kills=${prog.kills} alive=${prog.alive} hp=${prog.hp} nests=${prog.nests} room=${prog.room}\n`);
+    return h? {t:+h.time.toFixed(0), beats:[...h.beats.values()].filter(x=>x.done).length, kills:g.stats.kills, alive:g.enemies.aliveNow, hp:+g.player.health.toFixed(0), queens:g.broods.remaining, eggs:g.broods.eggsAlive, room:h.roomId()}:null; });
+  if (prog) process.stderr.write(`t=${prog.t}s beats=${prog.beats}/15 kills=${prog.kills} alive=${prog.alive} hp=${prog.hp} queens=${prog.queens} eggs=${prog.eggs} room=${prog.room}\n`);
   await p.waitForTimeout(6000);
 }
 if (last) console.log(JSON.stringify(last, null, 1));

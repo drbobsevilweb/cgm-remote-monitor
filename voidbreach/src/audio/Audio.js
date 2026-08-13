@@ -223,15 +223,38 @@ export class Audio {
     this.release(out, t + 0.25);
   }
 
-  reload(stage) {
+  /**
+   * The thermal cycle. Three distinct mechanical events, not one "vent" blob,
+   * and a forced vent is audibly a bigger, longer, wetter release than one the
+   * operator chose — the sound is the feedback for having got it wrong.
+   */
+  vent(stage, forced) {
     if (!this.ready) return;
     const c = this.ctx, t = c.currentTime;
-    const out = this.voice(0.42, 0, 0.2);
+    const out = this.voice(forced ? 0.6 : 0.42, 0, forced ? 0.35 : 0.2);
     if (!out) return;
-    if (stage === 'release') { this.noiseBurst(out, t, 0.06, 1800, 2.2, 'bandpass', 0.8); this.tone(out, t, 0.05, 400, 180, 'square', 0.2); }
-    if (stage === 'seat') { this.noiseBurst(out, t, 0.05, 900, 1.4, 'bandpass', 0.9); this.tone(out, t, 0.07, 150, 90, 'square', 0.35); }
-    if (stage === 'charge') { this.noiseBurst(out, t, 0.09, 3200, 1.8, 'bandpass', 0.85); this.tone(out, t + 0.03, 0.06, 700, 320, 'square', 0.25); }
-    this.release(out, t + 0.3);
+    if (stage === 'release') {
+      // the crack of the breech, then the gas
+      this.noiseBurst(out, t, 0.06, 1800, 2.2, 'bandpass', 0.8);
+      this.tone(out, t, 0.05, 400, 180, 'square', 0.2);
+      this.noiseBurst(out, t + 0.04, forced ? 0.85 : 0.42, forced ? 5200 : 3600,
+        forced ? 0.30 : 0.5, 'highpass', forced ? 0.85 : 0.5);
+      if (forced) this.tone(out, t + 0.02, 0.5, 220, 70, 'sawtooth', 0.16);
+    }
+    if (stage === 'purge') {
+      this.noiseBurst(out, t, forced ? 0.6 : 0.28, 2400, 0.6, 'bandpass', forced ? 0.7 : 0.45);
+      this.tone(out, t, 0.07, 150, 90, 'square', 0.30);
+    }
+    if (stage === 'seat') {
+      this.noiseBurst(out, t, 0.05, 900, 1.4, 'bandpass', 0.9);
+      this.tone(out, t, 0.06, 260, 140, 'square', 0.28);
+    }
+    if (stage === 'ready') {
+      // the charge: the one cue that says the trigger is live again
+      this.noiseBurst(out, t, 0.09, 3200, 1.8, 'bandpass', 0.85);
+      this.tone(out, t + 0.03, 0.08, 700, 980, 'square', 0.26);
+    }
+    this.release(out, t + (forced ? 1.2 : 0.6));
   }
 
   impact(e) {
@@ -330,6 +353,13 @@ export class Audio {
     if (kind === 'door') { this.noiseBurst(out, t, 0.5, 260, 0.8, 'lowpass', 0.55); this.tone(out, t, 0.6, 90, 60, 'sine', 0.25); }
     if (kind === 'locked') { this.tone(out, t, 0.12, 180, 120, 'square', 0.3); }
     if (kind === 'dry') { this.noiseBurst(out, t, 0.04, 2600, 5, 'bandpass', 0.5); }
+    // The redline warning is a thin rising ping under the gunfire, not a klaxon:
+    // it has to be audible while the trigger is down without owning the mix.
+    if (kind === 'heat') { this.tone(out, t, 0.10, 1400, 2100, 'triangle', 0.14); }
+    if (kind === 'coolant') {
+      this.noiseBurst(out, t, 0.36, 5600, 0.5, 'highpass', 0.5);
+      this.tone(out, t, 0.22, 1320, 660, 'sine', 0.18);
+    }
     this.release(out, t + 0.8);
   }
 

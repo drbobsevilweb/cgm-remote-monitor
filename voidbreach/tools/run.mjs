@@ -12,7 +12,7 @@ await p.goto('http://127.0.0.1:8099/index.html?'+query,{waitUntil:'load'});
 await p.waitForTimeout(waitMs);
 const st = await p.evaluate(()=>{ const g=window.__GAME; if(!g) return {boot:'no game'};
   return { mode:g.mode, bootMs:g.bootMs&&+g.bootMs.toFixed(0), t:+g.clock.simTime.toFixed(1),
-    enemies:g.enemies?g.enemies.aliveNow:null, kills:g.stats.kills, nests:g.nests?g.nests.remaining:null,
+    enemies:g.enemies?g.enemies.aliveNow:null, kills:g.stats.kills, queens:g.broods?g.broods.remaining:null,
     hp:g.player?+g.player.health.toFixed(0):null, calls:g.renderer.stats.calls, tris:g.renderer.stats.triangles,
     lights:g.lighting?g.lighting.activeLights:null, frames:g.profiler.frames, harness: !!window.__HARNESS, shot: window.__SHOT_INFO||null,
     result: window.__VOIDBREACH_RESULT__ ? {pass:window.__VOIDBREACH_RESULT__.pass, passed:window.__VOIDBREACH_RESULT__.beatsPassed} : null }; });

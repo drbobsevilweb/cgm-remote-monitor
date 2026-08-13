@@ -187,3 +187,102 @@ export function buildArchetypeGeometry(archetype) {
   }
   return parts;
 }
+
+/**
+ * Brood queen geometry, handed to the ENEMIES subsystem which owns her state.
+ *
+ * Three parts, because each one has to say something different and they
+ * animate independently:
+ *
+ *   hood    — the mineral carapace grown over her front. It is the armour
+ *             tell: it is a visibly different material from the rest of her,
+ *             and it is the reason the answer to a queen is to get behind her.
+ *   thorax  — where the legs anchor. Static.
+ *   abdomen — the egg sac. It swells through the laying cycle and empties
+ *             when the clutch drops, so the player can read "she is about to
+ *             produce something" from across the room.
+ *
+ * The mesh is built facing +Z; BROODS rotates it by the authored face.
+ */
+export function buildQueenGeometry(type, rng) {
+  const heavy = type === 'matriarch';
+  const s = heavy ? 1.22 : 1.0;
+
+  // --- hood: layered mineral plates, wider than she is
+  const hood = new MeshBuilder();
+  hood.setColor(0.86, 0.84, 0.90);
+  hood.addBoxRot(0, 1.55 * s, 1.15 * s, 2.05 * s, 1.35 * s, 0.34 * s, 0, 1);
+  hood.addBoxRot(0, 2.45 * s, 0.92 * s, 1.45 * s, 0.55 * s, 0.40 * s, 0.34, 1);
+  for (let i = -1; i <= 1; i += 2) {
+    hood.addBoxRot(i * 1.15 * s, 1.30 * s, 0.95 * s, 0.55 * s, 1.00 * s, 0.36 * s, i * 0.42, 1);
+    // horns, angled forward: they read as "front" from the top-down camera
+    hood.addBoxRot(i * 0.62 * s, 2.62 * s, 1.30 * s, 0.16 * s, 0.16 * s, 1.10 * s, i * 0.2, 2);
+  }
+  hood.setColor(1, 1, 1);
+
+  // --- thorax and legs
+  const body = new MeshBuilder();
+  body.setColor(0.92, 0.88, 0.98);
+  body.addBoxRot(0, 1.30 * s, 0.10 * s, 1.55 * s, 1.15 * s, 1.90 * s, 0, 1);
+  body.addBoxRot(0, 2.05 * s, 0.55 * s, 0.90 * s, 0.60 * s, 0.90 * s, 0, 1);
+  for (let i = 0; i < 6; i++) {
+    const side = i % 2 ? 1 : -1;
+    const along = 0.85 - Math.floor(i / 2) * 0.85;
+    const spread = rng.range(0.9, 1.25);
+    body.addBoxRot(side * 0.95 * s, 0.95 * s, along * s,
+      0.20 * s, 0.20 * s, 0.20 * s, 0, 2);
+    body.addBoxRot(side * 1.55 * s * spread, 1.35 * s, along * s,
+      1.40 * s, 0.17 * s, 0.17 * s, side * 0.5, 2);
+    body.addBoxRot(side * 2.15 * s * spread, 0.62 * s, along * s,
+      0.16 * s, 1.35 * s, 0.16 * s, 0, 2);
+  }
+  body.setColor(1, 1, 1);
+
+  // --- abdomen: the ovipositor sac, built around its own origin so scaling it
+  // swells outward rather than dragging it through the deck
+  const abdomen = new MeshBuilder();
+  abdomen.setColor(1.0, 0.94, 1.0);
+  abdomen.addCylinder(0, -0.85, 0, 1.28 * s, 1.70 * s, 12, true, true, 1);
+  abdomen.addCylinder(0, 0.85, 0, 0.85 * s, 0.70 * s, 10, true, true, 1);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    abdomen.addCylinder(Math.cos(a) * 0.95 * s, -0.5, Math.sin(a) * 0.95 * s,
+      rng.range(0.22, 0.40) * s, rng.range(0.5, 1.0) * s, 7, true, false, 1);
+  }
+  // the ovipositor itself, angled down and back toward the deck
+  abdomen.addCylinder(0, -1.65, -0.55 * s, 0.30 * s, 0.90 * s, 8, true, true, 2);
+  abdomen.setColor(1, 1, 1);
+
+  return {
+    hood: hood.build('queen_hood_' + type),
+    body: body.build('queen_body_' + type),
+    abdomen: abdomen.build('queen_abdomen_' + type),
+    abdomenY: 1.95 * s,
+    abdomenZ: -1.55 * s,
+    scale: s,
+  };
+}
+
+/**
+ * Egg geometry: a translucent-reading shell and a separate core.
+ *
+ * The incubation ramp is expressed as the CORE growing inside the SHELL, not
+ * as an animated emissive value. That is deliberate — per-instance emissive
+ * would need a shader patch and a new permutation, whereas a growing bright
+ * core is real geometry that bloom picks up on its own, and it survives every
+ * quality tier unchanged.
+ */
+export function buildEggGeometry() {
+  const shell = new MeshBuilder();
+  shell.setColor(0.88, 0.82, 0.94);
+  shell.addCylinder(0, 0.32, 0, 0.34, 0.62, 9, true, true, 1);
+  shell.addCylinder(0, 0.02, 0, 0.42, 0.16, 9, true, true, 1);
+  shell.addCylinder(0, 0.70, 0, 0.16, 0.20, 7, true, true, 1);
+  shell.setColor(1, 1, 1);
+
+  const core = new MeshBuilder();
+  core.setColor(1, 1, 1);
+  core.addCylinder(0, 0.34, 0, 0.22, 0.42, 8, true, true, 1);
+
+  return { shell: shell.build('egg_shell'), core: core.build('egg_core') };
+}

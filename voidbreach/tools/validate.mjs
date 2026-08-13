@@ -13,7 +13,7 @@ const DIR = process.argv[2] || 'captures/current';
 const capture = JSON.parse(fs.readFileSync(path.join(DIR, 'capture.json'), 'utf8'));
 
 const DARK_STATES = new Set(['DARK_CORRIDOR']);
-const BRIGHT_STATES = new Set(['EXPLOSION', 'NEST']);
+const BRIGHT_STATES = new Set(['EXPLOSION', 'QUEEN']);
 
 const rows = [];
 let failures = 0;
@@ -43,7 +43,7 @@ for (const [state, s] of Object.entries(capture.shots)) {
   gate(state, 'V7_aliasing', GATES.V7_aliasing(aliasing(img)));
 
   const violet = hueFraction(img, NEST_VIOLET_HUE);
-  gate(state, 'V8_nestColour', GATES.V8_nestColour(violet, { nestInFrame: s.nestInFrame }));
+  gate(state, 'V8_queenColour', GATES.V8_queenColour(violet, { queenInFrame: s.queenInFrame }));
 
   gate(state, 'C4_verticalStructure', GATES.C4_verticalStructure(verticalStructure(img)));
 

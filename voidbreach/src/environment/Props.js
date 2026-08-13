@@ -286,7 +286,8 @@ const PROPS = {
   },
 
   // ---------------------------------------------------------------- pickups
-  ammo(x, z, p, c) { c.pickups.push({ kind: 'ammo', x, z }); },
+  arc(x, z, p, c) { c.pickups.push({ kind: 'arc', x, z }); },
+  coolant(x, z, p, c) { c.pickups.push({ kind: 'coolant', x, z }); },
   medkit(x, z, p, c) { c.pickups.push({ kind: 'medkit', x, z }); },
   armour(x, z, p, c) { c.pickups.push({ kind: 'armour', x, z }); },
   flare(x, z, p, c) { c.pickups.push({ kind: 'flare', x, z }); },

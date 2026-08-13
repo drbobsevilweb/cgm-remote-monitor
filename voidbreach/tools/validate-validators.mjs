@@ -125,14 +125,14 @@ const reference = makeImage(W, H, (x, y) => {
 {
   const violet = makeImage(W, H, (x, y) => (x > W * 0.4 && x < W * 0.6 && y > H * 0.4 && y < H * 0.6)
     ? [194, 59, 216] : [40, 44, 52]);
-  const withNest = hueFraction(violet, NEST_VIOLET_HUE);
+  const withQueen = hueFraction(violet, NEST_VIOLET_HUE);
   expect('V8 detects nest violet when present',
-    GATES.V8_nestColour(withNest, { nestInFrame: true }).pass, (withNest * 100).toFixed(3) + '%');
+    GATES.V8_queenColour(withQueen, { queenInFrame: true }).pass, (withQueen * 100).toFixed(3) + '%');
   const noViolet = hueFraction(reference, NEST_VIOLET_HUE);
   expect('V8 FAILS when violet appears with no nest',
-    !GATES.V8_nestColour(withNest, { nestInFrame: false }).pass, (withNest * 100).toFixed(3) + '%');
+    !GATES.V8_queenColour(withQueen, { queenInFrame: false }).pass, (withQueen * 100).toFixed(3) + '%');
   expect('V8 passes a violet-free frame with no nest',
-    GATES.V8_nestColour(noViolet, { nestInFrame: false }).pass, (noViolet * 100).toFixed(3) + '%');
+    GATES.V8_queenColour(noViolet, { queenInFrame: false }).pass, (noViolet * 100).toFixed(3) + '%');
 }
 
 // ----------------------------------------------------- grating pattern C5

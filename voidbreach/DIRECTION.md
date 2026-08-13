@@ -26,7 +26,10 @@ Three feelings, in priority order:
    directions the player did not choose. Standing still is always wrong.
 2. **Agency** — the pressure has a *source*, the source is *visible*, and the source can be
    *destroyed*. The player is never merely enduring; they are always able to identify the
-   thing that would make this stop.
+   thing that would make this stop. Agency is layered, not binary: between "endure this" and
+   "kill the queen" there are always cheaper interventions available — shoot the eggs before
+   they come to term, weld the vent the flankers use — so the answer to a bad room is never
+   only "be better at shooting".
 3. **Relief** — when the source dies, the room audibly and visibly empties. This contrast is
    the payload of the entire game. Everything else exists to make this moment land.
 
@@ -42,9 +45,9 @@ A new player, given no explanation, must experience this sequence:
 | 0:08 | Sees a distant threat | Silhouette crossing a lit doorway 25 m ahead, audio first |
 | 0:15 | Is attacked by a swarm | Runners from front arc, then a flank from a side vent |
 | 0:25 | Realises they keep coming | Spawn rate exceeds kill rate; the corridor visibly fills |
-| 0:30 | Identifies the source | Nest is the only pulsing organic light in the space; it *breathes* on the same rhythm as the spawn |
-| 0:38 | Pushes through | Kill-corridor toward the nest is deliberately survivable |
-| 0:48 | Destroys the node | Rupture, pressure wave, lighting event, fluid |
+| 0:30 | Identifies the source | Eggs on the deck lead back to the queen; her sac *swells* on the same rhythm the eggs appear |
+| 0:38 | Pushes through | Kill-corridor toward the queen is deliberately survivable, and the eggs on the way are worth shooting |
+| 0:48 | Kills the queen | Rupture, pressure wave, lighting event, fluid, and her unhatched clutch goes out with her |
 | 0:50 | Feels the pressure drop | Living enemies panic/retreat, spawn stops, music drops to room tone |
 | 0:55 | Finds the next route | Bulkhead cycles open, warm amber light from the next space |
 | 0:60 | Wants to continue | — |
@@ -251,11 +254,77 @@ intensity: a muzzle flash must go white without turning the corridor magenta.
 ## 11. WHAT THIS GAME IS NOT
 
 Not a bullet-hell (projectiles are readable and sparse). Not a cover shooter (there is no
-cover, only geometry and distance). Not survival-horror with scarce ammo (ammo is *managed*,
-not agonised over). Not an RPG (no trees, no crafting, no inventory). Not a roguelite (the
-sector is authored, and it is authored well).
+cover, only geometry and distance). Not survival-horror with scarce ammo — **the primary
+weapon has no ammunition at all**, see §13. Not an RPG (no trees, no crafting, no inventory).
+Not a roguelite (the sector is authored, and it is authored well).
 
-## 12. ORIGINALITY GUARDRAILS
+## 12. THE BROOD — WHY QUEENS AND EGGS
+
+The source of the pressure is a **brood queen**: an anchored, hooded animal that lays eggs,
+and the eggs hatch into the Chorus. It is not an abstract spawner, and the difference is not
+cosmetic.
+
+A spawner produces enemies from nothing. There is exactly one thing to do about it, and the
+room gives no warning before the thing that is about to kill you exists. A queen produces a
+**visible intermediate**: a clutch of eggs on the deck, each with a bright core that grows as
+it comes to term. That single change buys four things the abstract version could not:
+
+1. **The room forecasts itself.** Six eggs at half-ripeness is a legible statement about the
+   next ten seconds. The player can read the room's future off the floor.
+2. **A cheaper answer exists.** An egg has 22 health. Killing one costs two rounds and a
+   little heat; killing what hatches out of it costs far more. Choosing to spend that heat
+   *now* is a real decision, made under pressure, with a visible payoff.
+3. **The frag becomes a level tool.** A grenade into a fresh clutch is the strongest single
+   action in the game against a queen who has been laying for twenty seconds. Explosives
+   ignore her hood entirely, so the secondary has a specific, learnable purpose beyond
+   "crowd".
+4. **The relief beat gets stronger.** When a queen dies, her unhatched clutch dies with her.
+   Nothing is left in the pipe. The drop is total, which is what §2 asked for.
+
+She has one more property: the **hood**. It is mineral, not meat, it is a visibly different
+material, and it eats two thirds of anything that hits her frontal arc. The answer to a queen
+is therefore to get behind her — which means moving, in a room she is actively filling. The
+armour is not there to add health; it is there to make the fight a movement problem.
+
+**Vents** are the other half of this. They were always where flanking pressure came from, and
+they are now grilles with health. Weld one shut and the Chorus has permanently lost a bearing
+it can arrive from. It is the only permanent, player-authored change to the level.
+
+## 13. HEAT — WHY THE CARBINE HAS NO AMMUNITION
+
+The MK4 draws from the suit cell. Rounds are not the constraint; the barrel is.
+
+"Am I out of ammo" is a question with one answer, asked at the worst possible moment, and
+answered by a number in the corner of the screen rather than by anything the player is doing.
+It produces two bad states: a full magazine, where the resource is invisible and free, and an
+empty one, where the player is a spectator. Neither is a decision.
+
+"How long can I keep holding this trigger" is asked continuously, answered with a finger,
+and weighed against what is actually in front of the player right now. Same tension, better
+question. So:
+
+- Heat builds per round. About 29 rounds — a little over three seconds — takes a cold barrel
+  to the redline.
+- Above the redline the bar pulses and a thin rising tone plays under the gunfire. This is
+  the only warning, and it is enough.
+- At 100% the barrel **vents itself**: a long, flat 2.15 s lockout the player did not choose,
+  with a heavy gas release and a camera shake. It is meant to feel like a mistake.
+- **R vents manually**, and it costs less the earlier it is done — half a second from nearly
+  cold, most of two seconds from the redline. The skill is letting go before you have to.
+- Heat also widens the group, so a hot barrel is a worse barrel before it is a stopped one.
+
+**Special weapons are the exception**, and they are the only ammunition left in the game. The
+ARC LANCE has 22 charges, does not regenerate, generates no heat, and pierces three bodies.
+It is a resource you *found*, and the interesting question about a found resource is when to
+spend it — which is a different question from the one heat asks, which is why both exist.
+When it runs dry the operator falls back to the carbine automatically. There is no stow
+control: a special is a temporary state, not a loadout slot.
+
+**Coolant canisters** dump current heat and double the cooling rate for twelve seconds. They
+are the pickup that means the most in a long fight and nothing at all in a corridor, which is
+the correct shape for a consumable.
+
+## 14. ORIGINALITY GUARDRAILS
 
 The Chorus organisms are built from **arthropod + fungal + industrial** references:
 segmented plating, radial mouths, sporing structures, mineral crusts. Explicitly avoided:
