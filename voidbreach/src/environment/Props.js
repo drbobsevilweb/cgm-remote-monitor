@@ -101,6 +101,7 @@ const PROPS = {
     c.lamps.push({
       x, y: y - 0.02, z,
       color: (room && room.lampColor) || 0xffb45a,
+      light: (room && room.lampLight) || 0xffd9b4,
       intensity: (room && room.lampI) || 1.0,
       broken: !!p.broken,
       alive: !p.broken,

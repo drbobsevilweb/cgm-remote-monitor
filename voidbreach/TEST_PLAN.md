@@ -194,6 +194,19 @@ these were found by looking at the game; all were found by an instrument.
 | Replay harness | Unreachable stragglers survived forever | A room could never feel cleared |
 | Replay harness | The harness itself could hang instead of reporting | A hang is not a failure report |
 
+## 6c. KNOWN OPEN FAILURES
+
+Recorded rather than hidden. A gate that is failing and documented is worth more
+than a gate quietly relaxed until it passes.
+
+| Gate | State | Detail |
+|------|-------|--------|
+| **P7 shader compilations after prewarm** | **FAILING — 13** | `prewarm()` renders one off-screen frame containing every archetype, both nest types and the VFX batches, but three.js still compiles ~13 programs during the first seconds of play. The likely remainder is shadow-pass program variants and material permutations that only appear once a light count changes. The instrument is correct and is doing its job; the prewarm is incomplete. Fix is to render the prewarm frame under the worst-case light count with the shadow pass enabled, and to re-run `renderer.compile` after the first light-pool allocation. |
+| E2 determinism (same seed → identical end state) | **UNVERIFIED** | The end-state hash is computed and emitted (`endStateHash`), and the RNG's own determinism is proven in `validate-validators.mjs`, but a same-seed A/B replay pair has not been run end to end. Two ~4-minute headless runs are required. |
+| E3 multi-seed (1337 / 4242 / 777) | **UNVERIFIED** | Only seed 1337 has been run to completion. |
+| Visual gates on the full state set | **PARTIAL** | Only `OPENING` has been captured and measured since the light-colour correction (13/14). `NEST`, `GRATING`, `DARK_CORRIDOR`, `SWARM`, `EXPLOSION`, `ELITE` are implemented and capturable but not yet measured against the current build. |
+| Boss / THE DEEP FORM | **NOT BUILT** | The Reactor Antechamber exists, is reachable and is the exit; the large final organism described in DIRECTION is not implemented. The slice currently ends on the fourth node plus the reactor arena. |
+
 ## 7. DEFINITION OF DONE (vertical slice)
 
 - V0, S1–S4, E1–E4, F1–F6 pass.

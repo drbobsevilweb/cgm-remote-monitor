@@ -153,7 +153,7 @@ void main() {
   float r2 = dot(fromCentre, fromCentre);
 
   // lateral chromatic aberration, strongest at the edges, plus damage kick
-  float ab = uAberration * (0.35 + r2 * 2.2) + uDamage * 0.0022;
+  float ab = uAberration * smoothstep(0.02, 0.22, r2) * (0.3 + r2 * 1.6) + uDamage * 0.0018;
   vec2 dir = normalize(fromCentre + 1e-6);
   vec3 scene;
   scene.r = texture2D(tScene, uv + dir * ab).r;
@@ -259,7 +259,7 @@ export class Post {
       uTime: { value: 0 },
       uGrain: { value: 0.022 },
       uVignette: { value: 0.42 },
-      uAberration: { value: 0.0011 },
+      uAberration: { value: 0.0006 },
       uDamage: { value: 0 }, uHeal: { value: 0 }, uFlash: { value: 0 },
       // uShadowTint is a MULTIPLIER on shadow pixels (cool them), not a lift.
       uShadowTint: { value: new THREE.Color(0.72, 0.86, 1.12) },

@@ -130,6 +130,7 @@ export class Environment {
       };
       const tone = toneOf(room);
       room.lampColor = tone.lamp;
+      room.lampLight = tone.lampLight;
       room.lampI = tone.lampI;
 
       this.buildShell(room, b);
@@ -274,7 +275,8 @@ export class Environment {
 
         this.lamps.push({
           x, y: y - 0.03, z,
-          color: room.lampColor, intensity: (highBay ? 1.45 : 1.0) * room.lampI,
+          color: room.lampColor, light: room.lampLight,
+          intensity: (highBay ? 1.45 : 1.0) * room.lampI,
           broken, alive: !broken,
           radius: highBay ? 15 : 9.5,
           hp: 8,

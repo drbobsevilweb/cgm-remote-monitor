@@ -19,13 +19,22 @@ export const PAL = {
 };
 
 /** Room tone -> ambient lighting character. */
+/**
+ * Room tone -> ambient character.
+ *
+ * `lamp` is the ACCENT colour (emissive housings, markings, HUD) — the meaning
+ * colour of DIRECTION §5.5. `lampLight` is what the fixture actually emits: a
+ * work lamp is warm WHITE, around 3000 K, not orange. Lighting the station with
+ * the accent colour turned the entire palette amber and destroyed the cool
+ * blue-black shadow the direction asks for; the two roles are now separate.
+ */
 export const TONES = {
-  amber:  { ambient: 0x4a6480, fill: 0x3a2e1e, level: 0.42, lamp: PAL.amber,  lampI: 1.0 },
-  cyan:   { ambient: 0x40607a, fill: 0x1c3038, level: 0.40, lamp: PAL.cyan,   lampI: 0.85 },
-  red:    { ambient: 0x503038, fill: 0x2a1010, level: 0.30, lamp: PAL.red,    lampI: 0.75 },
-  dim:    { ambient: 0x38485c, fill: 0x1a1c20, level: 0.26, lamp: PAL.amber,  lampI: 0.7 },
-  dark:   { ambient: 0x2a3a4c, fill: 0x101418, level: 0.10, lamp: PAL.amber,  lampI: 0.55 },
-  sodium: { ambient: 0x604830, fill: 0x3a2410, level: 0.38, lamp: PAL.sodium, lampI: 1.0 },
+  amber:  { ambient: 0x3d5c82, fill: 0x2a2418, level: 0.44, lamp: PAL.amber,  lampLight: 0xffd9b4, lampI: 1.0 },
+  cyan:   { ambient: 0x33587a, fill: 0x16303c, level: 0.42, lamp: PAL.cyan,   lampLight: 0xcfe9ff, lampI: 0.85 },
+  red:    { ambient: 0x46323f, fill: 0x2a1010, level: 0.32, lamp: PAL.red,    lampLight: 0xff7a63, lampI: 0.75 },
+  dim:    { ambient: 0x2e4260, fill: 0x171a1f, level: 0.28, lamp: PAL.amber,  lampLight: 0xffd2a8, lampI: 0.7 },
+  dark:   { ambient: 0x22364e, fill: 0x0e1218, level: 0.11, lamp: PAL.amber,  lampLight: 0xffcc9c, lampI: 0.55 },
+  sodium: { ambient: 0x4a4436, fill: 0x38200e, level: 0.40, lamp: PAL.sodium, lampLight: 0xffb277, lampI: 1.0 },
 };
 
 export function toneOf(room) { return TONES[room && room.tone] || TONES.dim; }

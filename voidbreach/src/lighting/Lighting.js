@@ -68,7 +68,7 @@ export class Lighting {
     for (const l of lamps) {
       if (!l.alive) continue;
       const e = this.addEmitter({
-        x: l.x, y: l.y - 0.15, z: l.z, color: l.color,
+        x: l.x, y: l.y - 0.15, z: l.z, color: l.light || l.color,
         intensity: 105 * l.intensity * l.intensity, radius: l.radius * 2.4, lamp: l,
       });
       l.emitter = e;
