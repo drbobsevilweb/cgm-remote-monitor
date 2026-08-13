@@ -1,0 +1,552 @@
+// ENVIRONMENT / Textures — every surface in VOIDBREACH is generated at boot.
+//
+// No binary assets (ARCHITECTURE §1). Each material produces three maps from one
+// authoring pass: albedo, ORM (r=AO, g=roughness, b=metalness — three.js reads
+// roughnessMap.g and metalnessMap.b, so one texture serves both) and a normal map
+// derived from the height channel by Sobel.
+//
+// The dimensions here are the construction language of DIRECTION §7. Changing a
+// number here changes the whole station, which is the point.
+
+import * as THREE from '../../vendor/three.module.js';
+import { fbm2, valueNoise2, clamp01 } from '../core/Mathx.js';
+
+const SIZE = 512;              // texels per tile
+const TILE = 2.5;              // metres per tile — one grid cell
+const PPM = SIZE / TILE;       // ~205 px per metre
+
+function canvas(size = SIZE) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  return c;
+}
+
+class TexGen {
+  constructor(rng, size = SIZE, tile = TILE) {
+    this.rng = rng;
+    this.size = size;
+    this.tile = tile;
+    this.ppm = size / tile;
+    this.albedo = canvas(size);
+    this.height = canvas(size);
+    this.orm = canvas(size);
+    this.a = this.albedo.getContext('2d');
+    this.h = this.height.getContext('2d');
+    this.o = this.orm.getContext('2d');
+  }
+
+  m(v) { return v * this.ppm; }   // metres -> pixels
+
+  base(albedoHex, heightGrey, rough, metal, ao = 1) {
+    this.a.fillStyle = albedoHex; this.a.fillRect(0, 0, this.size, this.size);
+    this.h.fillStyle = grey(heightGrey); this.h.fillRect(0, 0, this.size, this.size);
+    this.o.fillStyle = rgb(ao, rough, metal); this.o.fillRect(0, 0, this.size, this.size);
+  }
+
+  /** Per-pixel pass with access to all three targets. fn(x,y) -> {a,h,r,m,ao} deltas */
+  pixels(fn) {
+    const s = this.size;
+    const ai = this.a.getImageData(0, 0, s, s), ad = ai.data;
+    const hi = this.h.getImageData(0, 0, s, s), hd = hi.data;
+    const oi = this.o.getImageData(0, 0, s, s), od = oi.data;
+    for (let y = 0; y < s; y++) {
+      for (let x = 0; x < s; x++) {
+        const i = (y * s + x) * 4;
+        fn(x, y, ad, hd, od, i);
+      }
+    }
+    this.a.putImageData(ai, 0, 0);
+    this.h.putImageData(hi, 0, 0);
+    this.o.putImageData(oi, 0, 0);
+  }
+
+  /** Seamless fbm sampled in tile space (wraps because we sample a torus). */
+  noise(x, y, scale, octaves = 4, seed = 0) {
+    const s = this.size;
+    // torus sampling for seamlessness
+    const u = (x / s) * Math.PI * 2, v = (y / s) * Math.PI * 2;
+    const nx = Math.cos(u) * scale, ny = Math.sin(u) * scale;
+    const nz = Math.cos(v) * scale, nw = Math.sin(v) * scale;
+    return fbm2(nx + nz * 1.7, ny + nw * 1.3, octaves, seed);
+  }
+
+  finish(name, { normalStrength = 1.6, srgb = true } = {}) {
+    const map = new THREE.CanvasTexture(this.albedo);
+    map.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.anisotropy = 8;
+    map.name = name + '_albedo';
+
+    const orm = new THREE.CanvasTexture(this.orm);
+    orm.colorSpace = THREE.NoColorSpace;
+    orm.wrapS = orm.wrapT = THREE.RepeatWrapping;
+    orm.anisotropy = 4;
+    orm.name = name + '_orm';
+
+    const normal = new THREE.CanvasTexture(heightToNormal(this.height, normalStrength));
+    normal.colorSpace = THREE.NoColorSpace;
+    normal.wrapS = normal.wrapT = THREE.RepeatWrapping;
+    normal.anisotropy = 4;
+    normal.name = name + '_normal';
+
+    return { map, orm, normal };
+  }
+}
+
+function grey(v) { const c = Math.round(clamp01(v) * 255); return `rgb(${c},${c},${c})`; }
+function rgb(r, g, b) {
+  return `rgb(${Math.round(clamp01(r) * 255)},${Math.round(clamp01(g) * 255)},${Math.round(clamp01(b) * 255)})`;
+}
+
+function heightToNormal(heightCanvas, strength) {
+  const s = heightCanvas.width;
+  const src = heightCanvas.getContext('2d').getImageData(0, 0, s, s).data;
+  const out = canvas(s);
+  const ctx = out.getContext('2d');
+  const img = ctx.createImageData(s, s);
+  const d = img.data;
+  const at = (x, y) => src[(((y + s) % s) * s + ((x + s) % s)) * 4] / 255;
+  for (let y = 0; y < s; y++) {
+    for (let x = 0; x < s; x++) {
+      const l = at(x - 1, y), r = at(x + 1, y);
+      const u = at(x, y - 1), dn = at(x, y + 1);
+      let nx = (l - r) * strength * 4;
+      let ny = (u - dn) * strength * 4;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      const i = (y * s + x) * 4;
+      d[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      d[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      d[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+// ---------------------------------------------------------------- surfaces
+
+/** Rivets along a line, at the construction-language spacing of 300 mm. */
+function rivets(g, x0, y0, x1, y1, spacing = 0.3, r = 0.022) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  const n = Math.max(1, Math.round(len / g.m(spacing)));
+  const rr = g.m(r);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const x = x0 + dx * t, y = y0 + dy * t;
+    g.h.fillStyle = grey(0.72);
+    g.h.beginPath(); g.h.arc(x, y, rr, 0, Math.PI * 2); g.h.fill();
+    g.a.fillStyle = 'rgba(168,176,188,0.34)';
+    g.a.beginPath(); g.a.arc(x, y, rr, 0, Math.PI * 2); g.a.fill();
+    g.a.fillStyle = 'rgba(0,0,0,0.35)';
+    g.a.beginPath(); g.a.arc(x, y + rr * 0.5, rr * 0.9, 0, Math.PI * 2); g.a.fill();
+  }
+}
+
+function grimeAndWear(g, { grime = 0.55, streaks = true, seed = 0, dirt = '#141a1e' } = {}) {
+  const s = g.size;
+  // vertical grime streaks from seams and fixtures
+  if (streaks) {
+    g.a.save();
+    for (let i = 0; i < 26; i++) {
+      const x = g.rng.next() * s;
+      const w = g.rng.range(2, 14);
+      const top = g.rng.next() * s * 0.6;
+      const len = g.rng.range(s * 0.15, s * 0.7);
+      const grad = g.a.createLinearGradient(0, top, 0, top + len);
+      grad.addColorStop(0, 'rgba(10,14,17,0.34)');
+      grad.addColorStop(1, 'rgba(10,14,17,0)');
+      g.a.fillStyle = grad;
+      g.a.fillRect(x, top, w, len);
+    }
+    g.a.restore();
+  }
+  // blotchy grime + roughness response
+  const dr = parseInt(dirt.slice(1, 3), 16), dg = parseInt(dirt.slice(3, 5), 16), db = parseInt(dirt.slice(5, 7), 16);
+  g.pixels((x, y, ad, hd, od, i) => {
+    const n = g.noise(x, y, 3.1, 4, seed);
+    const n2 = g.noise(x, y, 11.0, 3, seed + 31);
+    const dirtAmt = clamp01((n - 0.42) * 1.9) * grime + n2 * 0.10 * grime;
+    ad[i] = ad[i] * (1 - dirtAmt) + dr * dirtAmt;
+    ad[i + 1] = ad[i + 1] * (1 - dirtAmt) + dg * dirtAmt;
+    ad[i + 2] = ad[i + 2] * (1 - dirtAmt) + db * dirtAmt;
+    od[i + 1] = Math.min(255, od[i + 1] + dirtAmt * 150);   // grime is rough
+    od[i + 2] = Math.max(0, od[i + 2] - dirtAmt * 170);     // and not metal
+    od[i] = Math.max(0, od[i] - dirtAmt * 40);              // and occludes
+  });
+}
+
+function scratches(g, count = 40, bright = 0.35) {
+  g.a.save();
+  g.a.lineCap = 'round';
+  for (let i = 0; i < count; i++) {
+    const x = g.rng.next() * g.size, y = g.rng.next() * g.size;
+    const a = g.rng.next() * Math.PI * 2;
+    const len = g.rng.range(6, 70);
+    g.a.strokeStyle = `rgba(180,192,205,${g.rng.range(0.05, bright)})`;
+    g.a.lineWidth = g.rng.range(0.6, 1.8);
+    g.a.beginPath();
+    g.a.moveTo(x, y);
+    g.a.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    g.a.stroke();
+  }
+  g.a.restore();
+}
+
+/** STEEL — the station's wall panel. 1.25 m panels, 40 mm rivets at 300 mm. */
+function steelWall(rng) {
+  const g = new TexGen(rng);
+  g.base('#616a75', 0.55, 0.58, 0.22, 1.0);
+  const panel = g.m(1.25);
+  const seam = Math.max(2, g.m(0.008));
+
+  // recessed panel field
+  for (let py = 0; py < g.size; py += panel) {
+    for (let px = 0; px < g.size; px += panel) {
+      const inset = g.m(0.04);
+      g.h.fillStyle = grey(0.62);
+      g.h.fillRect(px + inset, py + inset, panel - inset * 2, panel - inset * 2);
+      const v = rng.range(-0.03, 0.05);
+      g.a.fillStyle = `rgba(${Math.round(97 + v * 255)},${Math.round(106 + v * 255)},${Math.round(117 + v * 255)},1)`;
+      g.a.fillRect(px + inset, py + inset, panel - inset * 2, panel - inset * 2);
+    }
+  }
+  // seams
+  g.h.fillStyle = grey(0.30);
+  g.a.fillStyle = 'rgba(14,18,23,0.95)';
+  for (let p = 0; p <= g.size; p += panel) {
+    g.h.fillRect(p - seam / 2, 0, seam, g.size);
+    g.h.fillRect(0, p - seam / 2, g.size, seam);
+    g.a.fillRect(p - seam / 2, 0, seam, g.size);
+    g.a.fillRect(0, p - seam / 2, g.size, seam);
+  }
+  // rivet lines along every seam
+  for (let p = 0; p <= g.size; p += panel) {
+    rivets(g, p + g.m(0.06), 0, p + g.m(0.06), g.size);
+    rivets(g, 0, p + g.m(0.06), g.size, p + g.m(0.06));
+  }
+  scratches(g, 46, 0.28);
+  grimeAndWear(g, { grime: 0.38, seed: 7 });
+  return g.finish('steel', { normalStrength: 2.0 });
+}
+
+/** DECK PLATE — 1.25 m plates, diamond tread, worn along traffic lines. */
+function deckPlate(rng) {
+  const g = new TexGen(rng);
+  g.base('#5a626c', 0.5, 0.66, 0.18, 1.0);
+  const plate = g.m(1.25);
+  // tread diamonds at 125 mm
+  const step = g.m(0.125);
+  g.a.save(); g.h.save();
+  for (let y = 0; y < g.size + step; y += step) {
+    for (let x = 0; x < g.size + step; x += step) {
+      const ox = ((y / step) | 0) % 2 ? step * 0.5 : 0;
+      const cx = x + ox, cy = y;
+      const r = step * 0.30;
+      for (const [ctx, fill] of [[g.a, 'rgba(120,130,142,0.20)'], [g.h, grey(0.70)]]) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(((x + y) / step | 0) % 2 ? 0.6 : -0.6);
+        ctx.fillStyle = fill;
+        ctx.fillRect(-r * 1.7, -r * 0.45, r * 3.4, r * 0.9);
+        ctx.restore();
+      }
+    }
+  }
+  g.a.restore(); g.h.restore();
+  // plate seams
+  g.h.fillStyle = grey(0.24);
+  g.a.fillStyle = 'rgba(12,16,20,0.95)';
+  for (let p = 0; p <= g.size; p += plate) {
+    g.h.fillRect(p - 2, 0, 4, g.size); g.h.fillRect(0, p - 2, g.size, 4);
+    g.a.fillRect(p - 2, 0, 4, g.size); g.a.fillRect(0, p - 2, g.size, 4);
+  }
+  rivets(g, g.m(0.08), g.m(0.08), g.size - g.m(0.08), g.m(0.08), 0.4, 0.018);
+  // traffic wear: a smoother, brighter band
+  g.pixels((x, y, ad, hd, od, i) => {
+    const wear = clamp01(g.noise(x, y, 1.7, 3, 91) * 1.5 - 0.45);
+    ad[i] += wear * 26; ad[i + 1] += wear * 28; ad[i + 2] += wear * 30;
+    od[i + 1] = Math.max(0, od[i + 1] - wear * 90);
+  });
+  scratches(g, 70, 0.22);
+  grimeAndWear(g, { grime: 0.5, streaks: false, seed: 13 });
+  return g.finish('deck', { normalStrength: 1.3 });
+}
+
+/** PAINTED — containers, machinery housings. Tinted per mesh by vertex colour. */
+function paintedMetal(rng) {
+  const g = new TexGen(rng);
+  g.base('#7a7d78', 0.55, 0.60, 0.08, 1.0);
+  // corrugation, the language of a shipping container
+  const rib = g.m(0.2);
+  for (let x = 0; x < g.size; x += rib) {
+    const grad = g.a.createLinearGradient(x, 0, x + rib, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,0.22)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.10)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.22)');
+    g.a.fillStyle = grad; g.a.fillRect(x, 0, rib, g.size);
+    const hg = g.h.createLinearGradient(x, 0, x + rib, 0);
+    hg.addColorStop(0, grey(0.35)); hg.addColorStop(0.5, grey(0.75)); hg.addColorStop(1, grey(0.35));
+    g.h.fillStyle = hg; g.h.fillRect(x, 0, rib, g.size);
+  }
+  // paint chips revealing steel
+  for (let i = 0; i < 150; i++) {
+    const x = rng.next() * g.size, y = rng.next() * g.size;
+    const r = rng.range(1.5, 9);
+    g.a.fillStyle = `rgba(58,52,46,${rng.range(0.35, 0.85)})`;
+    g.a.beginPath(); g.a.ellipse(x, y, r, r * rng.range(0.5, 1.4), rng.angle(), 0, Math.PI * 2); g.a.fill();
+  }
+  scratches(g, 60, 0.3);
+  grimeAndWear(g, { grime: 0.55, seed: 23, dirt: '#2a2117' });
+  return g.finish('painted', { normalStrength: 1.5 });
+}
+
+/** CERAMIC — pale composite panelling for habitation and control spaces. */
+function ceramicPanel(rng) {
+  const g = new TexGen(rng);
+  g.base('#7d858c', 0.55, 0.80, 0.02, 1.0);
+  const panel = g.m(0.625);
+  g.a.strokeStyle = 'rgba(20,24,28,0.75)';
+  g.a.lineWidth = 2;
+  g.h.strokeStyle = grey(0.32); g.h.lineWidth = 3;
+  for (let p = 0; p <= g.size; p += panel) {
+    g.a.beginPath(); g.a.moveTo(p, 0); g.a.lineTo(p, g.size); g.a.stroke();
+    g.a.beginPath(); g.a.moveTo(0, p); g.a.lineTo(g.size, p); g.a.stroke();
+    g.h.beginPath(); g.h.moveTo(p, 0); g.h.lineTo(p, g.size); g.h.stroke();
+    g.h.beginPath(); g.h.moveTo(0, p); g.h.lineTo(g.size, p); g.h.stroke();
+  }
+  scratches(g, 30, 0.18);
+  grimeAndWear(g, { grime: 0.7, seed: 37, dirt: '#1b1a16' });
+  return g.finish('ceramic', { normalStrength: 1.0 });
+}
+
+/** CHORUSFLESH — the infestation. Wet, violet, veined. Never used elsewhere. */
+function chorusFlesh(rng) {
+  const g = new TexGen(rng);
+  g.base('#43264a', 0.5, 0.34, 0.0, 0.85);
+  // blotchy mass
+  g.pixels((x, y, ad, hd, od, i) => {
+    const n = g.noise(x, y, 4.5, 5, 5);
+    const n2 = g.noise(x, y, 14.0, 3, 55);
+    const v = n * 0.8 + n2 * 0.2;
+    ad[i] = 40 + v * 90;
+    ad[i + 1] = 18 + v * 34;
+    ad[i + 2] = 48 + v * 92;
+    hd[i] = hd[i + 1] = hd[i + 2] = 60 + v * 150;
+    od[i + 1] = 40 + (1 - v) * 90;      // wetter in the hollows
+    od[i] = 150 + v * 80;
+  });
+  // veins: branching bright lines
+  g.a.save();
+  g.a.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    let x = rng.next() * g.size, y = rng.next() * g.size;
+    let a = rng.angle();
+    let w = rng.range(1.5, 5);
+    g.a.beginPath(); g.a.moveTo(x, y);
+    g.h.beginPath(); g.h.moveTo(x, y);
+    for (let k = 0; k < 16; k++) {
+      a += rng.range(-0.55, 0.55);
+      x += Math.cos(a) * 10; y += Math.sin(a) * 10;
+      g.a.lineTo(x, y); g.h.lineTo(x, y);
+    }
+    g.a.strokeStyle = `rgba(${180 + rng.int(0, 50)},${60},${200},0.30)`;
+    g.a.lineWidth = w; g.a.stroke();
+    g.h.strokeStyle = grey(0.85); g.h.lineWidth = w * 1.2; g.h.stroke();
+  }
+  // pustules
+  for (let i = 0; i < 70; i++) {
+    const x = rng.next() * g.size, y = rng.next() * g.size, r = rng.range(3, 14);
+    const grad = g.a.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    grad.addColorStop(0, 'rgba(215,120,235,0.55)');
+    grad.addColorStop(1, 'rgba(60,20,70,0.0)');
+    g.a.fillStyle = grad;
+    g.a.beginPath(); g.a.arc(x, y, r, 0, Math.PI * 2); g.a.fill();
+    g.h.fillStyle = grey(0.9);
+    g.h.beginPath(); g.h.arc(x, y, r * 0.7, 0, Math.PI * 2); g.h.fill();
+  }
+  g.a.restore();
+  return g.finish('flesh', { normalStrength: 2.4 });
+}
+
+/** HAZARD — 45 degree stripes at 200 mm. Tile is 1 m, not 2.5 m. */
+function hazardStripe(rng, colA = '#f0a63a', colB = '#16181c') {
+  const g = new TexGen(rng, 256, 1.0);
+  g.base(colB, 0.6, 0.58, 0.10, 1.0);
+  const pitch = g.m(0.2);
+  g.a.save();
+  g.a.translate(g.size / 2, g.size / 2); g.a.rotate(Math.PI / 4); g.a.translate(-g.size, -g.size);
+  g.a.fillStyle = colA;
+  for (let x = 0; x < g.size * 2; x += pitch * 2) g.a.fillRect(x, 0, pitch, g.size * 2);
+  g.a.restore();
+  scratches(g, 24, 0.25);
+  grimeAndWear(g, { grime: 0.55, streaks: false, seed: 77 });
+  return g.finish('hazard', { normalStrength: 0.6 });
+}
+
+/** SCREEN — emissive console face. Returns an extra emissive map. */
+function screenFace(rng) {
+  const c = canvas(256);
+  const x = c.getContext('2d');
+  x.fillStyle = '#04161d'; x.fillRect(0, 0, 256, 256);
+  x.fillStyle = '#5fd8ff';
+  for (let i = 0; i < 26; i++) {
+    const y = 12 + i * 9;
+    if (rng.bool(0.25)) continue;
+    x.globalAlpha = rng.range(0.25, 0.95);
+    x.fillRect(14, y, rng.range(20, 200), rng.range(1.5, 3.5));
+  }
+  x.globalAlpha = 0.85;
+  x.fillStyle = '#ff6a4a';
+  x.fillRect(14, 220, 120, 12);
+  x.globalAlpha = 0.18;
+  for (let y = 0; y < 256; y += 3) { x.fillStyle = '#000'; x.fillRect(0, y, 256, 1); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+/** Radial light-pool decal with grating shadow bars baked in (DIRECTION §6). */
+function lightPool(rng, withBars) {
+  const s = 256;
+  const c = canvas(s);
+  const x = c.getContext('2d');
+  // Falloff is baked into RGB against black, not into alpha: the pool is drawn
+  // with additive blending, where black contributes nothing. Alpha-modulated
+  // additive is fragile across premultiplication paths; this is not.
+  x.fillStyle = '#000'; x.fillRect(0, 0, s, s);
+  const g = x.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.30, 'rgba(150,150,150,1)');
+  g.addColorStop(0.62, 'rgba(46,46,46,1)');
+  g.addColorStop(1, 'rgba(0,0,0,1)');
+  x.fillStyle = g; x.fillRect(0, 0, s, s);
+  if (withBars) {
+    // 250 mm grating pitch projected across the pool -> 20 bars of shadow
+    x.globalCompositeOperation = 'multiply';
+    x.fillStyle = 'rgba(30,30,30,1)';
+    const pitch = s / 20;
+    for (let i = 0; i < 20; i++) x.fillRect(i * pitch, 0, pitch * 0.34, s);
+    x.globalCompositeOperation = 'source-over';
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+
+/** Soft particle sprite (dust, smoke, spark) — one atlas row of 4. */
+function particleAtlas() {
+  const s = 256, c = canvas(s), x = c.getContext('2d');
+  x.clearRect(0, 0, s, s);
+  const cell = s / 2;
+  // 0: soft round (dust/smoke)
+  let g = x.createRadialGradient(cell * 0.5, cell * 0.5, 0, cell * 0.5, cell * 0.5, cell * 0.48);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(255,255,255,0.35)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, cell, cell);
+  // 1: hard spark point
+  g = x.createRadialGradient(cell * 1.5, cell * 0.5, 0, cell * 1.5, cell * 0.5, cell * 0.42);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.18, 'rgba(255,255,255,0.85)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(cell, 0, cell, cell);
+  // 2: fluid blob
+  x.save(); x.translate(cell * 0.5, cell * 1.5);
+  g = x.createRadialGradient(0, 0, 0, 0, 0, cell * 0.45);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.72, 'rgba(255,255,255,0.9)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.beginPath(); x.ellipse(0, 0, cell * 0.34, cell * 0.44, 0, 0, Math.PI * 2); x.fill();
+  x.restore();
+  // 3: streak / tracer
+  x.save(); x.translate(cell * 1.5, cell * 1.5);
+  g = x.createLinearGradient(-cell * 0.45, 0, cell * 0.45, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.55, 'rgba(255,255,255,1)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g;
+  x.beginPath(); x.ellipse(0, 0, cell * 0.46, cell * 0.10, 0, 0, Math.PI * 2); x.fill();
+  x.restore();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+
+/** Impact decals: 0 metal pit, 1 ceramic chip, 2 scorch, 3 fluid splat. */
+function decalAtlas(rng) {
+  const s = 512, c = canvas(s), x = c.getContext('2d');
+  x.clearRect(0, 0, s, s);
+  const cell = s / 2;
+  const draw = (cx, cy, fn) => { x.save(); x.translate(cx, cy); fn(); x.restore(); };
+  // metal pit: dark centre, bright torn rim
+  draw(cell * 0.5, cell * 0.5, () => {
+    let g = x.createRadialGradient(0, 0, 0, 0, 0, cell * 0.30);
+    g.addColorStop(0, 'rgba(8,9,11,0.95)'); g.addColorStop(0.62, 'rgba(30,33,38,0.75)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(0, 0, cell * 0.3, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(190,200,215,0.55)'; x.lineWidth = 2;
+    for (let i = 0; i < 9; i++) {
+      const a = rng.angle(), r0 = cell * 0.09, r1 = cell * rng.range(0.13, 0.26);
+      x.beginPath(); x.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+      x.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); x.stroke();
+    }
+  });
+  // ceramic chip: pale crater with radial cracks
+  draw(cell * 1.5, cell * 0.5, () => {
+    let g = x.createRadialGradient(0, 0, 0, 0, 0, cell * 0.32);
+    g.addColorStop(0, 'rgba(205,208,210,0.85)'); g.addColorStop(0.5, 'rgba(120,124,128,0.55)');
+    g.addColorStop(1, 'rgba(90,94,98,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(0, 0, cell * 0.32, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(20,22,26,0.5)'; x.lineWidth = 1.5;
+    for (let i = 0; i < 7; i++) {
+      const a = rng.angle();
+      x.beginPath(); x.moveTo(0, 0);
+      let px = 0, py = 0, aa = a;
+      for (let k = 0; k < 4; k++) { aa += rng.range(-0.3, 0.3); px += Math.cos(aa) * cell * 0.07; py += Math.sin(aa) * cell * 0.07; x.lineTo(px, py); }
+      x.stroke();
+    }
+  });
+  // scorch
+  draw(cell * 0.5, cell * 1.5, () => {
+    for (let i = 0; i < 22; i++) {
+      const a = rng.angle(), r = cell * rng.range(0.06, 0.42);
+      const g2 = x.createRadialGradient(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, 0,
+        Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, r * 0.7);
+      g2.addColorStop(0, 'rgba(10,9,8,0.55)'); g2.addColorStop(1, 'rgba(10,9,8,0)');
+      x.fillStyle = g2;
+      x.beginPath(); x.arc(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, r * 0.7, 0, Math.PI * 2); x.fill();
+    }
+  });
+  // fluid splat
+  draw(cell * 1.5, cell * 1.5, () => {
+    x.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < 16; i++) {
+      const a = rng.angle(), r = cell * rng.range(0.0, 0.34);
+      const rr = cell * rng.range(0.02, 0.10);
+      x.beginPath(); x.ellipse(Math.cos(a) * r, Math.sin(a) * r, rr, rr * rng.range(0.6, 1.5), a, 0, Math.PI * 2); x.fill();
+    }
+    x.beginPath(); x.ellipse(0, 0, cell * 0.17, cell * 0.14, 0, 0, Math.PI * 2); x.fill();
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+
+export function buildTextures(rng) {
+  const r = rng.child('textures');
+  return {
+    steel: steelWall(r),
+    deck: deckPlate(r),
+    painted: paintedMetal(r),
+    ceramic: ceramicPanel(r),
+    flesh: chorusFlesh(r),
+    hazard: hazardStripe(r),
+    screen: screenFace(r),
+    poolPlain: lightPool(r, false),
+    poolGrate: lightPool(r, true),
+    particles: particleAtlas(),
+    decals: decalAtlas(r),
+  };
+}
+
+export { TILE as TEXTURE_TILE };

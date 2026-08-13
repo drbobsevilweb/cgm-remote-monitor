@@ -1,0 +1,94 @@
+<!doctype html>
+<!-- Dev harness for the GEOMETRY -> LIGHTING stages of the visual development
+     order (DIRECTION §9 / TEST_PLAN §6). Not shipped in the game entry. -->
+<html><head><meta charset="utf-8"><title>VOIDBREACH — preview</title>
+<style>html,body{margin:0;background:#05070a;overflow:hidden}canvas{display:block}</style>
+</head><body>
+<canvas id="c"></canvas>
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+import { Rng } from './src/core/Rng.js';
+import { Renderer } from './src/renderer/Renderer.js';
+import { pickQuality } from './src/renderer/Quality.js';
+import { Sector } from './src/level/Sector.js';
+import { HELIX_DEEP } from './src/level/sectors/helix_deep.js';
+import { Environment } from './src/environment/Build.js';
+import { Lighting } from './src/lighting/Lighting.js';
+import { CELL } from './src/level/Grid.js';
+
+const params = new URLSearchParams(location.search);
+const W = +(params.get('w') || 1600), H = +(params.get('h') || 900);
+const canvas = document.getElementById('c');
+const rng = new Rng(+(params.get('seed') || 1337));
+const quality = pickQuality(params.get('q') || 'high');
+const t0 = performance.now();
+const renderer = new Renderer(canvas, quality, rng, true);
+renderer.setSize(W, H);
+const sector = new Sector(HELIX_DEEP, { emit(){} });
+const tBuild = performance.now();
+const env = new Environment(sector, quality, rng, { emit(){} });
+renderer.scene.add(env.root);
+renderer.scene.environment = Environment.makeEnvironment(renderer.renderer);
+renderer.scene.environmentIntensity = 0.45;
+const lighting = new Lighting(renderer.scene, quality, sector, rng);
+lighting.registerLamps(env.lamps);
+const tEnv = performance.now();
+window.__env = env; window.__lighting = lighting; window.__renderer = renderer;
+
+// Camera target: a named room, or explicit cell coordinates.
+const roomId = params.get('room') || 'cargo';
+const room = sector.roomById.get(roomId) || sector.rooms[0];
+let px = params.has('x') ? +params.get('x') * CELL : (room.x + room.w/2) * CELL;
+let pz = params.has('z') ? +params.get('z') * CELL : (room.z + room.h/2) * CELL;
+lighting.setRoom(room);
+lighting.blend = 1; lighting.tone = lighting.targetTone;
+renderer.rig.setZoomHint(+(params.get('d') || 16.5));
+renderer.rig.snapTo(px, pz);
+let aim = +(params.get('aim') || 0);
+lighting.flashOn = params.get('flash') !== '0';
+
+if (params.get('debug') === 'normal') renderer.scene.overrideMaterial = new THREE.MeshNormalMaterial();
+if (params.get('debug') === 'flat') renderer.scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: 0x8899aa, wireframe: params.get('wire') === '1' });
+if (params.get('debug') === 'std') renderer.scene.overrideMaterial = new THREE.MeshStandardMaterial({ color: 0x9aa2ac, metalness: 0.0, roughness: 0.75 });
+
+let frame = 0;
+function tick() {
+  const t = frame / 60;
+  lighting.update(1/60, t, px, 1.0, pz, Math.cos(aim), Math.sin(aim), renderer.camera);
+  env.update(1/60, t, px, pz);
+  renderer.rig.update(1/60, px, pz, Math.cos(aim), Math.sin(aim), 6);
+  renderer.render(t);
+  frame++;
+  if (frame < 4) requestAnimationFrame(tick);
+  else {
+    window.__READY = true;
+    const box=new THREE.Box3(); const list=[];
+    renderer.scene.traverse(o=>{ if(o.isMesh){ box.setFromObject(o); list.push({n:o.name||o.geometry.name, tris:(o.geometry.index?o.geometry.index.count:0)/3, min:[+box.min.x.toFixed(1),+box.min.y.toFixed(1),+box.min.z.toFixed(1)], max:[+box.max.x.toFixed(1),+box.max.y.toFixed(1),+box.max.z.toFixed(1)], vis:o.visible}); }});
+    window.__lights = { active: lighting.activeLights, emitters: lighting.emitters.length, pool: lighting.pool.map(l=>({vis:l.visible, i:+l.intensity.toFixed(1), d:+l.distance.toFixed(1), p:[+l.position.x.toFixed(1),+l.position.y.toFixed(1),+l.position.z.toFixed(1)]})), amb:+lighting.ambient.intensity.toFixed(3), flash:+lighting.flash.intensity.toFixed(0) };
+    window.__dbg={cam:[+renderer.camera.position.x.toFixed(1),+renderer.camera.position.y.toFixed(1),+renderer.camera.position.z.toFixed(1)], focus:[+renderer.rig.focus.x.toFixed(1),+renderer.rig.focus.z.toFixed(1)], meshes:list.slice(0,14), total:list.length};
+    window.__STATS = {
+      buildMs: +(tEnv - tBuild).toFixed(1),
+      totalMs: +(tEnv - t0).toFixed(1),
+      calls: renderer.stats.calls,
+      triangles: renderer.stats.triangles,
+      programs: renderer.stats.programs,
+      lamps: env.lamps.length,
+      tanks: env.tanks.length,
+      rooms: sector.rooms.length,
+    };
+  }
+}
+tick();
+window.__setView = (x, z, d, a) => {
+  px = x * CELL; pz = z * CELL; aim = a ?? aim;
+  renderer.rig.setZoomHint(d || 16.5);
+  renderer.rig.snapTo(px, pz);
+  const r = sector.roomAtWorld(px, pz); if (r) { lighting.setRoom(r); lighting.blend = 1; lighting.tone = lighting.targetTone; }
+  frame = 0; window.__READY = false; tick();
+};
+</script>
+</body></html>
+<script type="module">
+// debug dump appended by dev tooling
+import * as THREE from './vendor/three.module.js';
+window.addEventListener('load', ()=>{});

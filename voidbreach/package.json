@@ -1,0 +1,20 @@
+{
+  "name": "voidbreach",
+  "version": "1.0.0",
+  "description": "VOIDBREACH — top-down sci-fi horde shooter",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "serve": "node tools/serve.mjs",
+    "gauntlet": "node tools/run-gauntlet.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "type": "module"
+}
