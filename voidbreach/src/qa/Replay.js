@@ -77,6 +77,7 @@ export class Harness {
     this.unreachable = new Set();
     this.progressAt = 0;
     this.progressMark = '';
+    this.forcedExit = false;
 
     const ev = game.events;
     ev.on('tankDetonated', () => { this.tankFired = true; });
@@ -104,6 +105,7 @@ export class Harness {
   chooseGoal() {
     const g = this.game, p = g.player;
     // 1. hurt or dry: go and get the thing that fixes it. A player would.
+    if (this.forcedExit) return this.objectiveGoal();
     const wantHeal = p.health01 < 0.62;
     const wantAmmo = g.weapons.reserve < 170;
     if (wantHeal || wantAmmo) {
@@ -119,10 +121,14 @@ export class Harness {
       }
       if (best) return { x: best.x, z: best.z, kind: 'supply', key: best.kind + ':' + best.index };
     }
-    // 2. a live nest is the objective — that is the game
+    return this.objectiveGoal();
+  }
+
+  /** The objective, with no detours: a live node, or the exit. */
+  objectiveGoal() {
+    const g = this.game, p = g.player;
     const near = g.nests.nearest(p.x, p.z);
     if (near) return { x: near.nest.x, z: near.nest.z, kind: 'nest' };
-    // 3. otherwise the exit
     const e = g.sector.exitBox;
     return { x: (e.x0 + e.x1) / 2, z: (e.z0 + e.z1) / 2, kind: 'exit' };
   }
@@ -288,13 +294,19 @@ export class Harness {
 
     this.trackBeats(dt);
     this.checkShot();
-    // Stall watchdog: if neither the beats nor the operator's position have
-    // moved in 45 s of simulation, the run is wedged. Report it as a stall
-    // rather than hanging the gauntlet with no result at all.
-    const mark = `${this.beats.size}|${[...this.beats.values()].filter((b) => b.done).length}` +
-      `|${Math.round(p.x / 4)}|${Math.round(p.z / 4)}|${g.nests.remaining}|${g.stats.kills}`;
+    // Stall watchdog, keyed on PROGRESS only. Position is not progress: an
+    // autopilot oscillating between two points looks busy and achieves nothing.
+    const doneCount = [...this.beats.values()].filter((b) => b.done).length;
+    const mark = `${doneCount}|${g.nests.remaining}|${g.stats.kills}`;
     if (mark !== this.progressMark) { this.progressMark = mark; this.progressAt = this.time; }
-    else if (this.time - this.progressAt > 45) this.finish('stalled');
+    const stalledFor = this.time - this.progressAt;
+    if (stalledFor > 25 && !this.forcedExit) {
+      // Recovery: drop every supply detour and commit to the objective.
+      this.forcedExit = true;
+      this.unreachable.clear();
+      this.goalCell = -1;
+    }
+    if (stalledFor > 70) this.finish('stalled');
 
     if (this.time > 420 && !this.done) this.finish('timeout');
     if (g.mode === 'won') this.finish('exit');

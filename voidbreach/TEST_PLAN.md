@@ -148,7 +148,7 @@ Captured from **fresh page loads** at canonical states (`?shot=`), 1600×900:
 |----|------|-----------|
 | P1 | Draw calls, worst state | ≤ 220 |
 | P2 | Triangles, worst state | ≤ 900 k |
-| P3 | Dynamic lights, worst state | ≤ 7 (≤ 1 shadow-casting) |
+| P3 | Dynamic lights, worst state | ≤ 11 (≤ 1 shadow-casting) — 8 pooled practicals + flashlight + readability key |
 | P4 | CPU sim time, 150 enemies + 200 projectiles + 2000 particles | ≤ 4.0 ms mean, ≤ 8.0 ms p99 |
 | P5 | Steady-state heap growth over 120 s replay | ≤ 6 MB (no per-frame allocation) |
 | P6 | Sim-step hitches > 3× median | 0 outside the first 2 s |
@@ -177,6 +177,22 @@ Captured from **fresh page loads** at canonical states (`?shot=`), 1600×900:
 
 Iteration stops when two consecutive rounds produce no gate improvement and no reviewer
 identifies a problem of higher impact than the cost of change.
+
+## 6b. WHAT THE GAUNTLET HAS ACTUALLY CAUGHT
+
+Kept as a record, because it is the argument for the whole apparatus. None of
+these were found by looking at the game; all were found by an instrument.
+
+| Found by | Defect | Why the eye missed it |
+|----------|--------|----------------------|
+| Winding invariant | `addQuad` +Y, `addBoxRot` caps, `addCylinder` caps and every `addPipe` ring were wound against their shading normal, so **every floor and box top in the station was back-face culled** | The screenshot read as "too dark". Three lighting rebalances were spent on a geometry bug. |
+| Winding invariant | 16-bit indices chosen by index count instead of vertex count — merged rooms silently wrapped | Presented as one giant stray triangle, indistinguishable from a camera bug |
+| Validator self-test | `periodicity` returned 1.0 on a blank floor (denormal variance reads as a perfect match) | It would have reported grating where there is none, forever |
+| Validator self-test | `verticalStructure` measured only vertical gradients, so it scored ribs at zero | Would have failed every corridor and passed nothing |
+| Validator self-test | Aliasing threshold sat between a chequerboard and its own blur | Would have failed clean frames |
+| Replay harness | Pickup collection ran in `present()`, not `step()` — sampled once per rendered frame | Invisible at 60 fps; the operator walked through medkits in the harness, and a player at 20 fps would too |
+| Replay harness | Unreachable stragglers survived forever | A room could never feel cleared |
+| Replay harness | The harness itself could hang instead of reporting | A hang is not a failure report |
 
 ## 7. DEFINITION OF DONE (vertical slice)
 

@@ -1,0 +1,175 @@
+{
+ "seed": 1337,
+ "reason": "exit",
+ "simTime": 201.77,
+ "frames": 12106,
+ "beats": [
+  {
+   "id": 1,
+   "name": "spawn_assault",
+   "done": true,
+   "at": 0.02,
+   "deadline": 1,
+   "pass": true
+  },
+  {
+   "id": 2,
+   "name": "move_corridor",
+   "done": true,
+   "at": 3.57,
+   "deadline": 20,
+   "pass": true
+  },
+  {
+   "id": 3,
+   "name": "destroy_first_node",
+   "done": true,
+   "at": 23.32,
+   "deadline": 75,
+   "pass": true
+  },
+  {
+   "id": 4,
+   "name": "fight_swarm",
+   "done": true,
+   "at": 51.1,
+   "deadline": 120,
+   "pass": true
+  },
+  {
+   "id": 5,
+   "name": "trigger_explosive",
+   "done": true,
+   "at": 12.35,
+   "deadline": 150,
+   "pass": true
+  },
+  {
+   "id": 6,
+   "name": "cross_grating",
+   "done": true,
+   "at": 74.3,
+   "deadline": 170,
+   "pass": true
+  },
+  {
+   "id": 7,
+   "name": "fight_stalker",
+   "done": true,
+   "at": 42.63,
+   "deadline": 200,
+   "pass": true
+  },
+  {
+   "id": 8,
+   "name": "switch_ability",
+   "done": true,
+   "at": 12.93,
+   "deadline": 210,
+   "pass": true
+  },
+  {
+   "id": 9,
+   "name": "enter_dark_room",
+   "done": true,
+   "at": 100.58,
+   "deadline": 235,
+   "pass": true
+  },
+  {
+   "id": 10,
+   "name": "illuminate_enemies",
+   "done": true,
+   "at": 103.6,
+   "deadline": 245,
+   "pass": true
+  },
+  {
+   "id": 11,
+   "name": "destroy_final_node",
+   "done": true,
+   "at": 141.22,
+   "deadline": 330,
+   "pass": true
+  },
+  {
+   "id": 12,
+   "name": "reach_exit",
+   "done": true,
+   "at": 201.77,
+   "deadline": 380,
+   "pass": true
+  }
+ ],
+ "beatsPassed": 12,
+ "beatsTotal": 12,
+ "pass": true,
+ "stats": {
+  "kills": 74,
+  "shotsFired": 864,
+  "damageTaken": 256.7,
+  "peakEnemies": 15,
+  "firstEnemySeen": 11.233333333333471,
+  "firstDamage": 14.733333333333645,
+  "nestDeaths": [
+   23.3,
+   57.48,
+   86.63,
+   141.2
+  ],
+  "enemiesAtNestDeath": [
+   4,
+   14,
+   10,
+   9
+  ],
+  "reliefRatio": 0,
+  "health": 80,
+  "distance": 1027.7,
+  "grating": 273.4,
+  "waves": 4
+ },
+ "profile": {
+  "frames": 0,
+  "frame": {
+   "mean": 0,
+   "p50": 0,
+   "p95": 0,
+   "p99": 0,
+   "worst": 0
+  },
+  "sim": {
+   "mean": 0,
+   "p50": 0,
+   "p95": 0,
+   "p99": 0,
+   "worst": 0
+  },
+  "present": {
+   "mean": 0,
+   "p50": 0,
+   "p95": 0,
+   "p99": 0,
+   "worst": 0
+  },
+  "hitches": 0,
+  "counters": {
+   "calls": 62,
+   "triangles": 23007,
+   "enemies": 0,
+   "projectiles": 0,
+   "particles": 105,
+   "lights": 10,
+   "compilations": 15
+  },
+  "peak": {
+   "enemies": 15,
+   "projectiles": 8,
+   "particles": 251,
+   "calls": 120,
+   "triangles": 43599,
+   "lights": 10
+  }
+ },
+ "endStateHash": 3115339961
+}
