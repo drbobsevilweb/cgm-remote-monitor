@@ -173,6 +173,56 @@ failed.
 
 ---
 
+### 6b. Grating overhead — the other half of the signature
+
+Grating underfoot was only ever half the idea. The half that does the atmospheric
+work is grating **above**: service catwalks over every high bay, and the light
+that has to come through them.
+
+Three things are built together because they are one fact about the room:
+
+1. **The catwalk**, real geometry — stringers, a real bar deck with real gaps,
+   handrails. It lives in the overhead mesh and is therefore hidden for the room
+   the player is standing in. That rule is not negotiable: overhead structure
+   between a 62° camera and the operator is unreadable, and that lesson has
+   already been paid for once.
+2. **Its shadow on the deck**, which stays visible when the catwalk itself does
+   not. This is the whole trick — the player sees the structure from the next
+   bay and its consequence from underneath it, and the two read as the same
+   object without either one ever occluding the fight.
+3. **The shaft between them**, additive, sliced by the same bar pattern.
+
+The shadow is baked at build time, not shadow-mapped. There is one shadow-casting
+light in the budget and it belongs to the operator (ARCHITECTURE decision 5); a
+second one covering a 65 m bay would cost more than the entire lighting system.
+What is lost: the pattern does not shift when a lamp swings. What is kept: it is
+there at all, at sixty frames a second, on a laptop.
+
+Two rules make the shadow read as light rather than as a decal:
+
+- **It is wider than the thing casting it.** A fixture two metres above a
+  walkway magnifies its shadow by about half again. A shadow the same width as
+  the catwalk reads as a sticker.
+- **It is only as dark as the light falling there.** Darkness is modulated per
+  vertex by the nearest working fixture. Where the bay is already black there is
+  nothing to shadow, and a full-strength bar there looks painted on.
+
+## 6c. WARNING BEACONS
+
+Rotating hazard lights over every bulkhead and every queen chamber. They exist
+for two reasons and the second one is the real one:
+
+1. They are the only *moving* light in the station, so a still frame of an empty
+   corridor stops being a still frame.
+2. **They change.** Amber is the station running its own emergency lighting, as
+   it has for nineteen days. Red — sweeping faster — means the Chorus is up in
+   this part of the sector. A player learns that pairing in about ninety seconds
+   and thereafter reads the room they are walking into off the colour of the
+   wall, before they can see anything in it.
+
+The rate change is doing as much work as the colour, and deliberately so: a
+change in rhythm is legible in peripheral vision and a change in hue is not.
+
 ## 7. MATERIAL / CONSTRUCTION LANGUAGE
 
 One organisation built this station. The construction system is shared by every space.

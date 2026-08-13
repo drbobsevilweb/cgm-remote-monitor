@@ -83,12 +83,18 @@ export class Game {
     this.env = new Environment(this.sector, this.quality, this.rng, this.events);
     this.renderer.scene.add(this.env.root);
     this.renderer.scene.environment = Environment.makeEnvironment(this.renderer.renderer);
-    this.renderer.scene.environmentIntensity = 0.45;
+    // The IBL is a flat fill from every direction, so it is the one control that
+    // can quietly undo an authored darkness: at 0.45 it was lifting every deck
+    // plate in the sector to mid-grey and there was nothing for a light shaft or
+    // a catwalk shadow to be a contrast against. It exists to stop metal being
+    // black (see makeEnvironment), which it still does at less than half of that.
+    this.renderer.scene.environmentIntensity = 0.20;
     this.setLoading(0.45, 'RESTORING POWER');
     await frame();
 
     this.lighting = new Lighting(this.renderer.scene, this.quality, this.sector, this.rng);
     this.lighting.registerLamps(this.env.lamps);
+    this.env.registerBeacons(this.lighting);
     this.vfx = new Vfx(this.renderer.scene, this.env.textures, this.quality, this.rng, this.events);
 
     this.weapons = new Weapons(this.sector, this.events, this.rng);
@@ -555,6 +561,12 @@ export class Game {
       }
       light.pulse(e.x, e.y, e.z, PAL.violet, 120, 8, 0.16);
     });
+
+    // The walls know before the player does. A queen waking raises the alarm in
+    // her part of the station, so the corridor ahead turns red while the room
+    // the player is standing in is still quiet.
+    ev.on('queenWoke', (e) => this.env.setAlarm(e.x, e.z, 34, true));
+    ev.on('queenKilled', (e) => this.env.setAlarm(e.x, e.z, 34, false));
 
     ev.on('queenConvulsed', (e) => {
       light.pulse(e.x, 1.6, e.z, PAL.violet, 900, 18, 0.4);

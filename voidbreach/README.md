@@ -134,8 +134,8 @@ relief ratio     0.25     (gate: <= 0.40)
 eggs killed      25       — the second answer, being used
 vents sealed     4        — permanent, player-caused
 forced vents     7        vs 39 manual: the thermal decision is live
-draw calls       130      (gate: <= 220)
-triangles        46.5 k   (gate: <= 900 k)
+draw calls       139      (gate: <= 220)
+triangles        55.3 k   (gate: <= 900 k)
 ```
 
 Known failures are listed honestly in **TEST_PLAN §6c** — the shader-prewarm

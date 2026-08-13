@@ -499,6 +499,98 @@ function lightPool(rng, withBars) {
   return t;
 }
 
+/**
+ * The shadow a catwalk grating throws on the deck below it.
+ *
+ * This is the DIRECTION §6 signature, solved the only way it can be solved in a
+ * forward renderer with one shadow-casting light: the catwalk is real geometry
+ * overhead, and its shadow is a MULTIPLY layer projected onto the floor. White
+ * is "unshadowed" and multiplies to nothing; the bars darken.
+ *
+ * Softness is baked in rather than filtered at runtime. A grating four metres
+ * up, lit by a fixture two metres above THAT, throws an edge that is a good
+ * 60 mm of penumbra by the time it reaches the deck — a hard-edged stripe reads
+ * as a decal, and a soft one reads as light.
+ */
+function catwalkShadow(rng) {
+  const s = 512;
+  const c = canvas(s);
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, s, s);
+
+  // 250 mm bar pitch, projected: the tile is 2.5 m of FLOOR, and the projection
+  // from a lamp 2 m above a 4 m catwalk magnifies it by 1.5.
+  const bars = 7;
+  const pitch = s / bars;
+  const w = pitch * 0.40;
+  // The bars are a MODULATION, not the shadow. How dark the band gets is decided
+  // per vertex by how much light is actually falling there; if the texture also
+  // goes near-black the two multiply together and the deck turns into a painted
+  // ladder with hard rungs. Blur is heavy for the same reason — four metres of
+  // throw from a two-metre-wide fixture is most of a bar-width of penumbra.
+  x.filter = 'blur(9px)';
+  x.fillStyle = 'rgba(108,112,124,1)';
+  for (let i = 0; i < bars; i++) x.fillRect(i * pitch + pitch * 0.3, -8, w, s + 16);
+  // cross-bracing every metre, thinner and lighter: it is further from the deck
+  x.fillStyle = 'rgba(168,172,182,1)';
+  for (let i = 0; i < 3; i++) x.fillRect(-8, i * (s / 3) + s / 9, s + 16, s * 0.055);
+  x.filter = 'none';
+
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * A shaft of light: the vertical gradient and the stripe the catwalk cuts into
+ * it. Drawn additively, so — like the light pools — the falloff lives in RGB
+ * against black rather than in alpha (see lightPool for why).
+ *
+ * V runs from the fixture at the top to the deck at the bottom. The shaft is
+ * brightest just under the lamp and gone before it lands, because a volume of
+ * dust scatters most where the light is densest, and because a shaft that
+ * reaches the floor at full strength hides the floor.
+ */
+function lightShaft(rng) {
+  const s = 256;
+  const c = canvas(s);
+  const x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, s, s);
+  const g = x.createLinearGradient(0, 0, 0, s);
+  g.addColorStop(0.00, 'rgba(255,255,255,1)');
+  g.addColorStop(0.16, 'rgba(190,190,190,1)');
+  g.addColorStop(0.52, 'rgba(64,64,64,1)');
+  g.addColorStop(0.84, 'rgba(12,12,12,1)');
+  g.addColorStop(1.00, 'rgba(0,0,0,1)');
+  x.fillStyle = g; x.fillRect(0, 0, s, s);
+
+  // The same grating that shadows the deck also slices the shaft. This is what
+  // makes the two features read as one fact about the room rather than as two
+  // unrelated effects.
+  x.globalCompositeOperation = 'multiply';
+  x.filter = 'blur(2px)';
+  const bars = 7, pitch = s / bars;
+  x.fillStyle = 'rgba(38,38,38,1)';
+  for (let i = 0; i < bars; i++) x.fillRect(i * pitch + pitch * 0.3, 0, pitch * 0.40, s);
+  x.filter = 'none';
+  x.globalCompositeOperation = 'source-over';
+
+  // Soften the vertical edges so the shaft has no visible silhouette.
+  x.globalCompositeOperation = 'multiply';
+  const e = x.createLinearGradient(0, 0, s, 0);
+  e.addColorStop(0.00, 'rgba(0,0,0,1)');
+  e.addColorStop(0.13, 'rgba(255,255,255,1)');
+  e.addColorStop(0.87, 'rgba(255,255,255,1)');
+  e.addColorStop(1.00, 'rgba(0,0,0,1)');
+  x.fillStyle = e; x.fillRect(0, 0, s, s);
+  x.globalCompositeOperation = 'source-over';
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+
 /** Soft particle sprite (dust, smoke, spark) — one atlas row of 4. */
 function particleAtlas() {
   const s = 256, c = canvas(s), x = c.getContext('2d');
@@ -613,6 +705,8 @@ export function buildTextures(rng, params) {
     screen: screenFace(r),
     poolPlain: lightPool(r, false),
     poolGrate: lightPool(r, true),
+    catwalkShadow: catwalkShadow(r),
+    lightShaft: lightShaft(r),
     particles: particleAtlas(),
     decals: decalAtlas(r),
   };

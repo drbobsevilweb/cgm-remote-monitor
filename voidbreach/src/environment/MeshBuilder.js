@@ -33,6 +33,46 @@ export class MeshBuilder {
   quad(a, b, c, d) { this.idx.push(a, b, c, a, c, d); }
 
   /**
+   * A floor quad with EXPLICIT UVs rather than world-derived ones.
+   *
+   * Every other surface in the station wants UVs from world position, so that
+   * adjacent merged quads are seamless. A projected pattern is the exception:
+   * its orientation is a property of the thing casting it, not of the world
+   * axes. A catwalk running north-south throws bars that run east-west, and
+   * world-derived UVs cannot express that — they gave every run the same bar
+   * direction, which turned half the shadows into solid unbroken bands.
+   */
+  addFloorQuadUV(x0, z0, x1, z1, y, u0, v0, u1, v1) {
+    const a = this.vert(x0, y, z1, 0, 1, 0, u0, v1);
+    const b = this.vert(x1, y, z1, 0, 1, 0, u1, v1);
+    const c = this.vert(x1, y, z0, 0, 1, 0, u1, v0);
+    const d = this.vert(x0, y, z0, 0, 1, 0, u0, v0);
+    this.quad(a, b, c, d);
+  }
+
+  /**
+   * A free quad from four explicit corners, UV-mapped 0..1 rather than by world
+   * position. Used for things whose texture is a shape rather than a surface —
+   * a light shaft is narrow at the fixture and wide at the deck, and its
+   * gradient has to run top-to-bottom regardless of how long the drop is.
+   *
+   * Corner order is (topLeft, topRight, bottomLeft, bottomRight); V=0 is the top
+   * so the texture reads the way it was drawn.
+   */
+  addTaperedQuad(tlx, tly, tlz, trx, trY, trz, blx, bly, blz, brx, bry, brz) {
+    // One shared normal: these are unlit surfaces, but a zero normal upsets
+    // three's bounding/attribute handling, so give them something sane.
+    const ux = trx - tlx, uz = trz - tlz;
+    const len = Math.hypot(ux, uz) || 1;
+    const nx = -uz / len, nz = ux / len;
+    const a = this.vert(tlx, tly, tlz, nx, 0, nz, 0, 0);
+    const b = this.vert(trx, trY, trz, nx, 0, nz, 1, 0);
+    const c = this.vert(brx, bry, brz, nx, 0, nz, 1, 1);
+    const d = this.vert(blx, bly, blz, nx, 0, nz, 0, 1);
+    this.quad(a, b, c, d);
+  }
+
+  /**
    * Axis-aligned quad. `axis`: 'y' (floor/ceiling), 'x', 'z'.
    * UVs derive from world position so adjacent quads are seamless.
    */

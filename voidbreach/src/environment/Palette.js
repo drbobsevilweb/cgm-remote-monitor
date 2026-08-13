@@ -28,13 +28,25 @@ export const PAL = {
  * the accent colour turned the entire palette amber and destroyed the cool
  * blue-black shadow the direction asks for; the two roles are now separate.
  */
+/**
+ * Levels were roughly halved once the catwalk shadows and the shafts went in.
+ *
+ * Those two features are the composition — a striped floor and a visible volume
+ * of air only exist as *contrast*, and at the old ambient there was nothing for
+ * them to be a contrast against: the bays were evenly lit, so a shadow read as a
+ * dark decal and a shaft read as a smear. The rule in §5.2 has not changed, only
+ * the number: ambient exists to keep shadow detail off the floor of the noise,
+ * and the practicals do the shaping. There is simply much less of it now, and
+ * what is left is bluer, which is what leaves room for an amber fixture to mean
+ * something.
+ */
 export const TONES = {
-  amber:  { ambient: 0x3d5c82, fill: 0x2a2418, level: 0.44, lamp: PAL.amber,  lampLight: 0xffd9b4, lampI: 1.0 },
-  cyan:   { ambient: 0x33587a, fill: 0x16303c, level: 0.42, lamp: PAL.cyan,   lampLight: 0xcfe9ff, lampI: 0.85 },
-  red:    { ambient: 0x46323f, fill: 0x2a1010, level: 0.32, lamp: PAL.red,    lampLight: 0xff7a63, lampI: 0.75 },
-  dim:    { ambient: 0x2e4260, fill: 0x171a1f, level: 0.28, lamp: PAL.amber,  lampLight: 0xffd2a8, lampI: 0.7 },
-  dark:   { ambient: 0x22364e, fill: 0x0e1218, level: 0.11, lamp: PAL.amber,  lampLight: 0xffcc9c, lampI: 0.55 },
-  sodium: { ambient: 0x4a4436, fill: 0x38200e, level: 0.40, lamp: PAL.sodium, lampLight: 0xffb277, lampI: 1.0 },
+  amber:  { ambient: 0x2d4160, fill: 0x1a160e, level: 0.21, lamp: PAL.amber,  lampLight: 0xffd9b4, lampI: 1.25 },
+  cyan:   { ambient: 0x24425f, fill: 0x0d1f28, level: 0.20, lamp: PAL.cyan,   lampLight: 0xcfe9ff, lampI: 1.05 },
+  red:    { ambient: 0x33232c, fill: 0x1c0a0a, level: 0.16, lamp: PAL.red,    lampLight: 0xff7a63, lampI: 0.95 },
+  dim:    { ambient: 0x1f2d43, fill: 0x0e1013, level: 0.13, lamp: PAL.amber,  lampLight: 0xffd2a8, lampI: 0.9 },
+  dark:   { ambient: 0x162435, fill: 0x070a0e, level: 0.055, lamp: PAL.amber, lampLight: 0xffcc9c, lampI: 0.7 },
+  sodium: { ambient: 0x342f24, fill: 0x241408, level: 0.19, lamp: PAL.sodium, lampLight: 0xffb277, lampI: 1.25 },
 };
 
 /**
