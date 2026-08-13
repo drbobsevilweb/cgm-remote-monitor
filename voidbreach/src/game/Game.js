@@ -26,7 +26,8 @@ import { Enemies, ARCHETYPES, KIND } from '../enemies/Enemies.js';
 import { Nests } from '../enemies/Nests.js';
 import { Director } from '../director/Director.js';
 import { Profiler } from '../qa/Profiler.js';
-import { PAL } from '../environment/Palette.js';
+import { PAL, applyPaletteOverrides } from '../environment/Palette.js';
+import { section, overridesActive } from '../core/Overrides.js';
 import { CELL, C } from '../level/Grid.js';
 import { clamp, clamp01 } from '../core/Mathx.js';
 
@@ -68,6 +69,10 @@ export class Game {
 
   async boot() {
     const t0 = performance.now();
+    // Studio overrides are applied before anything is built. They are ignored
+    // entirely in deterministic runs, so the gates always measure what ships.
+    applyPaletteOverrides(section('palette'));
+    this.usingOverrides = overridesActive();
     this.sector = new Sector(HELIX_DEEP, this.events);
     const v = this.sector.validate();
     if (!v.ok) console.warn('[sector]', v.problems);
@@ -110,6 +115,9 @@ export class Game {
     this.lighting.setRoom(this.sector.roomAtWorld(this.player.x, this.player.z));
     this.lighting.blend = 1; this.lighting.tone = this.lighting.targetTone;
 
+    this.applyGradeOverrides(section('grade'));
+    this.applyLightingOverrides(section('lighting'));
+
     this.prewarm();
     this.setLoading(1, 'READY');
     this.bootMs = performance.now() - t0;
@@ -119,6 +127,46 @@ export class Game {
   }
 
   setLoading(p, text) { this.loadProgress = p; this.loadingText = text; }
+
+  /** Post-chain uniforms the Studio can drive (exposure, bloom, AgX look, grade). */
+  applyGradeOverrides(o) {
+    if (!o) return;
+    const u = this.renderer.post.u;
+    const num = (k, uni) => { if (typeof o[k] === 'number') u[uni].value = o[k]; };
+    num('exposure', 'uExposure');
+    num('bloomStrength', 'uBloomStrength');
+    num('grain', 'uGrain');
+    if (typeof o.vignette === 'number') this.baseVignette = o.vignette;
+    num('aberration', 'uAberration');
+    num('saturation', 'uSaturation');
+    num('lookPower', 'uLookPower');
+    num('lookSat', 'uLookSat');
+    num('lookOffset', 'uLookOffset');
+    num('lookSlope', 'uLookSlope');
+    if (typeof o.bloomThreshold === 'number') {
+      this.renderer.post.matBright.uniforms.uThreshold.value = o.bloomThreshold;
+    }
+    if (o.shadowTint) u.uShadowTint.value.set(o.shadowTint);
+    if (o.highlightTint) u.uHighlightTint.value.set(o.highlightTint);
+    if (typeof o.fogDensity === 'number') this.renderer.scene.fog.density = o.fogDensity;
+    if (o.fogColour) this.renderer.scene.fog.color.set(o.fogColour);
+  }
+
+  /** Light levels the Studio can drive. */
+  applyLightingOverrides(o) {
+    if (!o) return;
+    if (typeof o.ambientLevel === 'number') this.lighting.ambientLevel = o.ambientLevel;
+    if (typeof o.flashIntensity === 'number') {
+      this.lighting.flashIntensity = o.flashIntensity;
+      this.lighting.flash.intensity = o.flashIntensity;
+    }
+    if (typeof o.lampIntensity === 'number') {
+      for (const e of this.lighting.lampEmitters || []) {
+        e.intensity = o.lampIntensity * (e.lamp ? e.lamp.intensity * e.lamp.intensity : 1);
+      }
+    }
+    if (typeof o.envIntensity === 'number') this.renderer.scene.environmentIntensity = o.envIntensity;
+  }
 
   /**
    * Compile every shader permutation the sector uses before play starts, so no
@@ -557,7 +605,7 @@ export class Game {
     post.uDamage.value = Math.max(this.vfx.screen.damage, (1 - p.health01) * 0.28);
     post.uHeal.value = this.vfx.screen.heal;
     post.uFlash.value = this.vfx.screen.flash;
-    post.uVignette.value = 0.42 + (1 - p.health01) * 0.22;
+    post.uVignette.value = (this.baseVignette ?? 0.42) + (1 - p.health01) * 0.22;
 
     this.renderer.render(time);
 

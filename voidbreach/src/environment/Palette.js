@@ -37,4 +37,18 @@ export const TONES = {
   sodium: { ambient: 0x4a4436, fill: 0x38200e, level: 0.40, lamp: PAL.sodium, lampLight: 0xffb277, lampI: 1.0 },
 };
 
+/**
+ * Studio overrides for the palette and room tones. Applied once, at module
+ * load, so LIGHTING and ENVIRONMENT both see the same values.
+ */
+export function applyPaletteOverrides(o) {
+  if (!o) return;
+  if (o.PAL) Object.assign(PAL, o.PAL);
+  if (o.TONES) {
+    for (const k of Object.keys(o.TONES)) {
+      if (TONES[k]) Object.assign(TONES[k], o.TONES[k]);
+    }
+  }
+}
+
 export function toneOf(room) { return TONES[room && room.tone] || TONES.dim; }

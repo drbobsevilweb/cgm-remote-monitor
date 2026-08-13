@@ -10,6 +10,7 @@ import { buildTextures } from './Textures.js';
 import { buildProp } from './Props.js';
 import { PAL, TONES, toneOf } from './Palette.js';
 import { CELL, C } from '../level/Grid.js';
+import { section } from '../core/Overrides.js';
 
 export class Environment {
   constructor(sector, quality, rng, events) {
@@ -21,7 +22,8 @@ export class Environment {
     this.root.name = 'station';
     this.time = 0;
 
-    this.textures = buildTextures(rng);
+    // Studio overrides, if any. Ignored in deterministic runs (Overrides.js).
+    this.textures = buildTextures(rng, section('materials'));
     this.materials = this.makeMaterials();
 
     this.lamps = [];

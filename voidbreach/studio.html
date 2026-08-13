@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOIDBREACH — STUDIO</title>
+<style>
+  :root {
+    --bg: #0a0d12; --panel: #12171f; --line: #202a36; --ink: #dfe8f2;
+    --dim: #8a9aad; --amber: #ffb45a; --cyan: #5fd8ff; --violet: #c23bd8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font: 13px/1.45 "Inter", "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 328px 1fr 208px; height: 100%; }
+  #left, #right { background: var(--panel); overflow-y: auto; border-right: 1px solid var(--line); }
+  #right { border-right: 0; border-left: 1px solid var(--line); }
+  #centre { position: relative; background: #05070a; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  header { padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 14px; letter-spacing: .16em; font-weight: 800; }
+  header p { margin: 3px 0 0; font-size: 11px; color: var(--dim); letter-spacing: .05em; }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
+    color: var(--dim); padding: 9px 4px; font: inherit; font-size: 11px; letter-spacing: .08em;
+    cursor: pointer; }
+  .tabs button.on { color: var(--amber); border-bottom-color: var(--amber); }
+  .tabs button:hover { color: var(--ink); }
+
+  .group { border-bottom: 1px solid var(--line); }
+  .group > summary { padding: 8px 14px; cursor: pointer; font-size: 11px; letter-spacing: .1em;
+    color: var(--cyan); font-weight: 600; list-style: none; user-select: none; }
+  .group > summary::-webkit-details-marker { display: none; }
+  .group > summary::before { content: '▸ '; color: var(--dim); }
+  .group[open] > summary::before { content: '▾ '; }
+  .rows { padding: 4px 14px 12px; }
+
+  .row { display: grid; grid-template-columns: 108px 1fr 46px; gap: 8px;
+    align-items: center; margin: 5px 0; }
+  .row label { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .row input[type=range] { width: 100%; accent-color: var(--amber); height: 18px; }
+  .row input[type=color] { width: 100%; height: 22px; padding: 0; border: 1px solid var(--line);
+    background: none; cursor: pointer; }
+  .row input[type=checkbox] { accent-color: var(--amber); justify-self: start; }
+  .row .val { font: 11px ui-monospace, Menlo, Consolas, monospace; color: var(--ink);
+    text-align: right; }
+  .row select { width: 100%; background: #0d1218; color: var(--ink); border: 1px solid var(--line);
+    padding: 3px; font: inherit; font-size: 11px; }
+
+  .actions { padding: 12px 14px; display: grid; gap: 6px; }
+  button.act { background: #1a2430; color: var(--ink); border: 1px solid var(--line);
+    padding: 7px; font: inherit; font-size: 11px; letter-spacing: .06em; cursor: pointer; }
+  button.act:hover { border-color: var(--cyan); color: var(--cyan); }
+  button.act.primary { background: #23303f; border-color: var(--amber); color: var(--amber); }
+  #status { padding: 0 14px 12px; font-size: 11px; color: var(--dim); min-height: 18px; }
+
+  .maps { padding: 10px; display: grid; gap: 8px; }
+  .maps h3 { margin: 0 0 2px; font-size: 10px; letter-spacing: .1em; color: var(--dim); }
+  .maps canvas { width: 100%; image-rendering: pixelated; border: 1px solid var(--line);
+    background: #000; display: block; }
+  #hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: #5f7healthy;
+    color: var(--dim); pointer-events: none; letter-spacing: .04em; }
+  #fps { position: absolute; right: 12px; top: 10px; font: 11px ui-monospace, monospace;
+    color: var(--dim); pointer-events: none; }
+  textarea { width: 100%; height: 120px; background: #070a0e; color: var(--ink);
+    border: 1px solid var(--line); font: 10px ui-monospace, monospace; padding: 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="left">
+    <header>
+      <h1>VOIDBREACH STUDIO</h1>
+      <p>MATERIAL &amp; MODEL AUTHORING</p>
+    </header>
+    <div class="tabs" id="tabs"></div>
+    <div id="panels"></div>
+    <div class="actions">
+      <button class="act primary" id="apply">APPLY TO GAME &amp; PLAY</button>
+      <button class="act" id="save">SAVE OVERRIDES</button>
+      <button class="act" id="copy">COPY JSON</button>
+      <button class="act" id="load">PASTE JSON…</button>
+      <button class="act" id="reset">RESET TO SHIPPED DEFAULTS</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="centre">
+    <canvas id="view"></canvas>
+    <div id="fps"></div>
+    <div id="hint">DRAG orbit &nbsp;·&nbsp; WHEEL zoom &nbsp;·&nbsp; RIGHT-DRAG pan</div>
+  </div>
+
+  <div id="right" class="maps">
+    <div><h3>ALBEDO</h3><canvas id="m_albedo" width="256" height="256"></canvas></div>
+    <div><h3>ORM (AO / ROUGH / METAL)</h3><canvas id="m_orm" width="256" height="256"></canvas></div>
+    <div><h3>NORMAL</h3><canvas id="m_normal" width="256" height="256"></canvas></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three.module.js';
+import { Rng } from './src/core/Rng.js';
+import { Renderer } from './src/renderer/Renderer.js';
+import { pickQuality } from './src/renderer/Quality.js';
+import { MeshBuilder } from './src/environment/MeshBuilder.js';
+import { buildTextures, TEXTURE_DEFAULTS } from './src/environment/Textures.js';
+import { PAL, TONES } from './src/environment/Palette.js';
+import { ARCHETYPES, buildArchetypeGeometry } from './src/enemies/Archetypes.js';
+import { saveOverrides, clearOverrides } from './src/core/Overrides.js';
+
+// ---------------------------------------------------------------- state
+const DEFAULTS = {
+  materials: structuredClone(TEXTURE_DEFAULTS),
+  palette: {
+    PAL: { ...PAL },
+    TONES: structuredClone(TONES),
+  },
+  lighting: { ambientLevel: 1.0, lampIntensity: 105, flashIntensity: 380, envIntensity: 0.45 },
+  grade: {
+    exposure: 1.0, bloomStrength: 0.42, bloomThreshold: 1.15,
+    lookPower: 1.28, lookSat: 1.22, lookOffset: -0.018, lookSlope: 1.0,
+    saturation: 1.06, vignette: 0.42, grain: 0.022, aberration: 0.0006,
+    shadowTint: '#b8dbff', highlightTint: '#8c5220',
+    fogDensity: 0.0155, fogColour: '#0a0f16',
+  },
+  models: { archetype: 'runner', scale: 1.0, accentGlow: 0.12 },
+};
+let S = structuredClone(DEFAULTS);
+try {
+  const raw = localStorage.getItem('voidbreach.overrides.v1');
+  if (raw) S = deepMerge(S, JSON.parse(raw));
+} catch (e) { /* start from defaults */ }
+
+function deepMerge(a, b) {
+  const out = Array.isArray(a) ? a.slice() : { ...a };
+  for (const k of Object.keys(b || {})) {
+    const v = b[k];
+    out[k] = (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object')
+      ? deepMerge(out[k], v) : v;
+  }
+  return out;
+}
+const c2h = (c) => '#' + new THREE.Color(c).getHexString();
+
+// ---------------------------------------------------------------- renderer
+const canvas = document.getElementById('view');
+const rng = new Rng(1337);
+const quality = pickQuality('high');
+const renderer = new Renderer(canvas, quality, rng, false);
+const scene = renderer.scene;
+const camera = renderer.camera;
+
+scene.environment = (await import('./src/environment/Build.js'))
+  .Environment.makeEnvironment(renderer.renderer);
+
+// A small diorama built from the same MeshBuilder the station uses, so what you
+// see here is exactly what the sector will render.
+const root = new THREE.Group();
+scene.add(root);
+
+const lights = {
+  ambient: new THREE.AmbientLight(0x3d5c82, 1),
+  hemi: new THREE.HemisphereLight(0x3d5c82, 0x2a2418, 0.7),
+  bay: new THREE.PointLight(0xffd9b4, 200, 34, 2),
+  bay2: new THREE.PointLight(0xffd9b4, 200, 34, 2),
+  flash: new THREE.SpotLight(0xfff0dc, 380, 32, 0.46, 0.55, 1.7),
+  nest: new THREE.PointLight(PAL.violet, 40, 16, 2),
+};
+lights.bay.position.set(-3, 5.4, -2);
+lights.bay2.position.set(4, 5.4, 3);
+lights.flash.position.set(0, 1.55, 7);
+lights.flash.target.position.set(0, 0.5, -2);
+lights.flash.castShadow = true;
+lights.flash.shadow.mapSize.set(quality.shadowMap, quality.shadowMap);
+lights.flash.shadow.bias = -0.0016;
+lights.flash.shadow.normalBias = 0.035;
+lights.nest.position.set(5.5, 1.4, -5);
+scene.add(...Object.values(lights), lights.flash.target);
+
+let built = null;
+function rebuildWorld() {
+  if (built) {
+    root.clear();
+    for (const g of built.geoms) g.dispose();
+    for (const m of built.mats) m.dispose();
+    for (const t of built.texes) { t.map.dispose(); t.orm.dispose(); t.normal.dispose(); }
+  }
+  const r2 = new Rng(1337);
+  const tex = buildTextures(r2, S.materials);
+  const std = (t, opts = {}) => new THREE.MeshStandardMaterial({
+    map: t.map, normalMap: t.normal, roughnessMap: t.orm, metalnessMap: t.orm, aoMap: t.orm,
+    roughness: 1, metalness: 1, vertexColors: true, envMapIntensity: 0.55, ...opts,
+  });
+  const mats = {
+    steel: std(tex.steel), deck: std(tex.deck), painted: std(tex.painted),
+    ceramic: std(tex.ceramic), hazard: std(tex.hazard),
+    flesh: std(tex.flesh, {
+      emissive: new THREE.Color(S.palette.PAL.violet), emissiveMap: tex.flesh.map,
+      emissiveIntensity: 0.30, envMapIntensity: 0.2,
+    }),
+  };
+
+  const B = { steel: new MeshBuilder(), deck: new MeshBuilder(), painted: new MeshBuilder(),
+    ceramic: new MeshBuilder(), hazard: new MeshBuilder(), flesh: new MeshBuilder() };
+
+  // deck 16 x 16, two walls, ribs at 2.5 m, a container, a tank, a grating strip
+  B.deck.addQuad(-8, 0, -8, 8, 0, 8, 0, 1, 0, 1);
+  B.steel.addQuad(-8, 0, -8, 8, 6.5, -8, 0, 0, 1, 1);
+  B.ceramic.addQuad(-8, 0, -8, -8, 6.5, 8, 1, 0, 0, 1);
+  for (let x = -8; x <= 8; x += 2.5) {
+    B.steel.setColor(0.62, 0.64, 0.68);
+    B.steel.addBox(x - 0.07, 0, -8, x + 0.07, 6.5, -7.7, 2);
+    B.steel.setColor(1, 1, 1);
+  }
+  B.steel.setColor(0.72, 0.74, 0.78);
+  B.steel.addBox(-8, 0, -8, 8, 0.35, -7.97, 2);          // kick plate
+  B.steel.setColor(1, 1, 1);
+  B.painted.setColor(0.42, 0.30, 0.22);
+  B.painted.addBoxRot(-4, 1.3, 2.5, 3.6, 1.3, 1.1, 0.2, 1);
+  B.painted.setColor(1, 1, 1);
+  B.hazard.addBox(1.5, 0, 4.5, 6.5, 0.06, 6.5, 1);       // hazard-striped floor mark
+  // grating strip over a void
+  const PITCH = 0.25, BAR = 0.03;
+  B.steel.setColor(0.66, 0.68, 0.72);
+  for (let z = -6; z <= -1; z += PITCH) B.steel.addBox(2, -0.05, z, 7, 0, z + BAR, 2);
+  B.steel.setColor(1, 1, 1);
+  B.flesh.setColor(0.9, 0.85, 1.0);
+  B.flesh.addCylinder(5.5, 0, -5, 1.3, 0.5, 12, true, false, 1);
+  B.flesh.addCylinder(5.5, 0.3, -5, 0.8, 2.1, 10, true, false, 1);
+
+  const geoms = [], matList = Object.values(mats);
+  for (const k of Object.keys(B)) {
+    if (B[k].isEmpty) continue;
+    const g = B[k].build(k);
+    geoms.push(g);
+    const mesh = new THREE.Mesh(g, mats[k]);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    root.add(mesh);
+  }
+
+  // the selected creature, so model edits are visible against the materials
+  const arch = ARCHETYPES.find((a) => a.id === S.models.archetype) || ARCHETYPES[0];
+  const spec = { ...arch, scale: arch.scale * S.models.scale };
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: arch.colour, roughness: 0.62, metalness: 0.05,
+    emissive: new THREE.Color(arch.accent), emissiveIntensity: S.models.accentGlow,
+  });
+  const limbMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(arch.colour).multiplyScalar(0.65), roughness: 0.75, metalness: 0.05,
+  });
+  matList.push(bodyMat, limbMat);
+  for (const part of buildArchetypeGeometry(spec)) {
+    geoms.push(part.geometry);
+    const isLimb = part.role.startsWith('leg') || part.role === 'tail' || part.role.startsWith('blade');
+    const m = new THREE.Mesh(part.geometry, isLimb ? limbMat : bodyMat);
+    // lay the parts out in their rest pose around the body origin
+    const h = spec.height, r = spec.radius;
+    let ox = 0, oy = h, oz = 0, rz = 0;
+    if (part.role === 'head') { oz = r * 0.85; oy = h + h * 0.16; }
+    else if (part.role === 'sac') { oz = -r * 0.5; oy = h + h * 0.3; }
+    else if (part.role === 'plate') { oz = r * 0.92; oy = h + h * 0.18; }
+    else if (part.role === 'tail') { oz = -r * 1.1; oy = h + h * 0.22; }
+    else if (part.role.startsWith('blade')) {
+      const side = part.role === 'blade0' ? 1 : -1;
+      ox = side * r * 0.78; oy = h + h * 0.12; oz = r * 0.3; rz = side * 0.25;
+    } else if (part.role.startsWith('leg')) {
+      const li = +part.role.slice(3);
+      const side = (li % 2) ? 1 : -1, front = li < 2 ? 1 : -1;
+      ox = side * r * 0.92; oz = front * r * 0.55; oy = h - h * 0.3; rz = side * 0.5;
+    }
+    m.position.set(-2.5 + ox, oy, -2 + oz);
+    m.rotation.z = rz;
+    m.castShadow = true; m.receiveShadow = true;
+    root.add(m);
+  }
+
+  built = { geoms, mats: matList, texes: [tex.steel, tex.deck, tex.painted, tex.ceramic, tex.flesh, tex.hazard] };
+  showMaps(tex);
+}
+
+const shown = { key: 'steel' };
+function showMaps(tex) {
+  const t = tex[shown.key] || tex.steel;
+  for (const [id, src] of [['m_albedo', t.map], ['m_orm', t.orm], ['m_normal', t.normal]]) {
+    const cv = document.getElementById(id);
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (src.image) ctx.drawImage(src.image, 0, 0, cv.width, cv.height);
+  }
+}
+
+function applyLive() {
+  const g = S.grade, u = renderer.post.u;
+  u.uExposure.value = g.exposure;
+  u.uBloomStrength.value = g.bloomStrength;
+  renderer.post.matBright.uniforms.uThreshold.value = g.bloomThreshold;
+  u.uLookPower.value = g.lookPower; u.uLookSat.value = g.lookSat;
+  u.uLookOffset.value = g.lookOffset; u.uLookSlope.value = g.lookSlope;
+  u.uSaturation.value = g.saturation; u.uVignette.value = g.vignette;
+  u.uGrain.value = g.grain; u.uAberration.value = g.aberration;
+  u.uShadowTint.value.set(g.shadowTint); u.uHighlightTint.value.set(g.highlightTint);
+  scene.fog.density = g.fogDensity; scene.fog.color.set(g.fogColour);
+  scene.environmentIntensity = S.lighting.envIntensity;
+
+  const tone = S.palette.TONES.amber;
+  lights.ambient.color.set(tone.ambient);
+  lights.ambient.intensity = tone.level * 1.4 * S.lighting.ambientLevel;
+  lights.hemi.color.set(tone.ambient); lights.hemi.groundColor.set(tone.fill);
+  lights.hemi.intensity = tone.level * 0.9 * S.lighting.ambientLevel;
+  lights.bay.color.set(tone.lampLight); lights.bay2.color.set(tone.lampLight);
+  const bay = S.lighting.lampIntensity * 1.45 * 1.45;
+  lights.bay.intensity = bay; lights.bay2.intensity = bay;
+  lights.flash.intensity = S.lighting.flashIntensity;
+  lights.nest.color.set(S.palette.PAL.violet);
+}
+
+// ---------------------------------------------------------------- controls
+const SCHEMA = {
+  MATERIALS: [
+    ['materials.steel', 'STEEL — WALL PANEL', {
+      base: ['colour'], rough: [0, 1, 0.01], metal: [0, 1, 0.01],
+      panel: [0.25, 3, 0.05, 'm'], seam: [0, 0.04, 0.001, 'm'], inset: [0, 0.15, 0.005, 'm'],
+      rivetSpacing: [0.1, 1, 0.01, 'm'], rivetSize: [0.005, 0.06, 0.001, 'm'],
+      scratches: [0, 160, 1], scratchBright: [0, 1, 0.01],
+      grime: [0, 1, 0.01], grimeTint: ['colour'], streaks: ['bool'],
+      normalStrength: [0, 5, 0.05],
+    }],
+    ['materials.deck', 'DECK PLATE', {
+      base: ['colour'], rough: [0, 1, 0.01], metal: [0, 1, 0.01],
+      plate: [0.5, 4, 0.05, 'm'], tread: [0.04, 0.5, 0.005, 'm'], treadStrength: [0, 1, 0.01],
+      wear: [0, 3, 0.05], scratches: [0, 200, 1], scratchBright: [0, 1, 0.01],
+      grime: [0, 1, 0.01], grimeTint: ['colour'], streaks: ['bool'],
+      normalStrength: [0, 5, 0.05],
+    }],
+    ['materials.painted', 'PAINTED — CONTAINERS', {
+      base: ['colour'], rough: [0, 1, 0.01], metal: [0, 1, 0.01],
+      rib: [0.05, 1, 0.01, 'm'], chips: [0, 400, 5],
+      scratches: [0, 200, 1], grime: [0, 1, 0.01], grimeTint: ['colour'],
+      normalStrength: [0, 5, 0.05],
+    }],
+    ['materials.ceramic', 'CERAMIC — HABITATION', {
+      base: ['colour'], rough: [0, 1, 0.01], metal: [0, 1, 0.01],
+      panel: [0.2, 2, 0.025, 'm'], scratches: [0, 120, 1],
+      grime: [0, 1, 0.01], grimeTint: ['colour'], normalStrength: [0, 5, 0.05],
+    }],
+    ['materials.flesh', 'CHORUSFLESH', {
+      base: ['colour'], rough: [0, 1, 0.01], blotchScale: [1, 16, 0.5],
+      veins: [0, 80, 1], veinColour: ['colour'],
+      pustules: [0, 200, 1], pustuleColour: ['colour'], normalStrength: [0, 6, 0.05],
+    }],
+    ['materials.hazard', 'HAZARD STRIPE', {
+      colA: ['colour'], colB: ['colour'], pitch: [0.05, 0.6, 0.01, 'm'],
+      rough: [0, 1, 0.01], metal: [0, 1, 0.01], grime: [0, 1, 0.01],
+    }],
+  ],
+  LIGHT: [
+    ['lighting', 'LIGHT LEVELS', {
+      lampIntensity: [0, 400, 1, 'cd'], flashIntensity: [0, 1200, 5, 'cd'],
+      ambientLevel: [0, 4, 0.02], envIntensity: [0, 2, 0.01],
+    }],
+    ['palette.TONES.amber', 'ROOM TONE — AMBER (work areas)', {
+      ambient: ['colour'], fill: ['colour'], lampLight: ['colour'],
+      lamp: ['colour'], level: [0, 1.2, 0.01], lampI: [0, 2, 0.02],
+    }],
+    ['palette.TONES.dark', 'ROOM TONE — DARK (coolant, pump)', {
+      ambient: ['colour'], fill: ['colour'], lampLight: ['colour'],
+      level: [0, 1.2, 0.01], lampI: [0, 2, 0.02],
+    }],
+    ['palette.TONES.sodium', 'ROOM TONE — SODIUM (reactor)', {
+      ambient: ['colour'], fill: ['colour'], lampLight: ['colour'],
+      level: [0, 1.2, 0.01], lampI: [0, 2, 0.02],
+    }],
+    ['palette.PAL', 'MEANING COLOURS (DIRECTION §5.5)', {
+      amber: ['colour'], red: ['colour'], cyan: ['colour'],
+      violet: ['colour'], bile: ['colour'], sodium: ['colour'],
+    }],
+  ],
+  GRADE: [
+    ['grade', 'TONEMAP & GRADE', {
+      exposure: [0.1, 3, 0.01], bloomStrength: [0, 2, 0.01], bloomThreshold: [0, 4, 0.01],
+      lookPower: [0.5, 2.5, 0.01], lookSat: [0, 2, 0.01], lookOffset: [-0.1, 0.1, 0.001],
+      lookSlope: [0.2, 2, 0.01], saturation: [0, 2, 0.01],
+      vignette: [0, 1, 0.01], grain: [0, 0.1, 0.001], aberration: [0, 0.004, 0.0001],
+      shadowTint: ['colour'], highlightTint: ['colour'],
+      fogDensity: [0, 0.06, 0.0005], fogColour: ['colour'],
+    }],
+  ],
+  MODELS: [
+    ['models', 'CREATURE', {
+      archetype: ['select', ARCHETYPES.map((a) => a.id)],
+      scale: [0.4, 3, 0.02], accentGlow: [0, 1.5, 0.01],
+    }],
+  ],
+};
+
+const REBUILD_KEYS = ['materials', 'models'];
+const tabsEl = document.getElementById('tabs');
+const panelsEl = document.getElementById('panels');
+let activeTab = 'MATERIALS';
+
+function get(path) { return path.split('.').reduce((o, k) => o[k], S); }
+function setVal(path, key, v) { get(path)[key] = v; }
+
+function buildUi() {
+  tabsEl.innerHTML = ''; panelsEl.innerHTML = '';
+  for (const tab of Object.keys(SCHEMA)) {
+    const b = document.createElement('button');
+    b.textContent = tab;
+    b.className = tab === activeTab ? 'on' : '';
+    b.onclick = () => { activeTab = tab; buildUi(); };
+    tabsEl.appendChild(b);
+  }
+  for (const [path, title, fields] of SCHEMA[activeTab]) {
+    const d = document.createElement('details');
+    d.className = 'group'; d.open = true;
+    const sum = document.createElement('summary'); sum.textContent = title;
+    sum.onclick = () => {
+      const mk = path.split('.')[1];
+      if (path.startsWith('materials.') && mk) { shown.key = mk; rebuildWorld(); }
+    };
+    d.appendChild(sum);
+    const rows = document.createElement('div'); rows.className = 'rows';
+    const obj = get(path);
+    for (const [key, def] of Object.entries(fields)) {
+      if (obj[key] === undefined) continue;
+      rows.appendChild(makeRow(path, obj, key, def));
+    }
+    d.appendChild(rows);
+    panelsEl.appendChild(d);
+  }
+}
+
+function makeRow(path, obj, key, def) {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('label'); lab.textContent = key; row.appendChild(lab);
+  const out = document.createElement('span'); out.className = 'val';
+  const dirty = () => {
+    if (REBUILD_KEYS.includes(path.split('.')[0])) scheduleRebuild();
+    applyLive();
+    note('edited — not yet applied to the game');
+  };
+
+  if (def[0] === 'colour') {
+    const i = document.createElement('input'); i.type = 'color';
+    i.value = c2h(obj[key]);
+    i.oninput = () => { obj[key] = i.value; out.textContent = ''; dirty(); };
+    row.appendChild(i); row.appendChild(out);
+  } else if (def[0] === 'bool') {
+    const i = document.createElement('input'); i.type = 'checkbox';
+    i.checked = !!obj[key];
+    i.onchange = () => { obj[key] = i.checked; dirty(); };
+    row.appendChild(i); row.appendChild(out);
+  } else if (def[0] === 'select') {
+    const sel = document.createElement('select');
+    for (const opt of def[1]) {
+      const o = document.createElement('option'); o.value = o.textContent = opt;
+      if (obj[key] === opt) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.onchange = () => { obj[key] = sel.value; dirty(); };
+    row.appendChild(sel); row.appendChild(out);
+  } else {
+    const [min, max, step, unit] = def;
+    const i = document.createElement('input'); i.type = 'range';
+    i.min = min; i.max = max; i.step = step; i.value = obj[key];
+    const fmt = () => out.textContent = (+obj[key]).toFixed(step < 0.01 ? 4 : step < 1 ? 2 : 0) + (unit ? '' : '');
+    i.oninput = () => { obj[key] = +i.value; fmt(); dirty(); };
+    fmt();
+    row.appendChild(i); row.appendChild(out);
+  }
+  return row;
+}
+
+let rebuildTimer = null;
+function scheduleRebuild() {
+  clearTimeout(rebuildTimer);
+  // texture regeneration is ~200 ms; debounce so dragging a slider stays smooth
+  rebuildTimer = setTimeout(() => { rebuildWorld(); }, 180);
+}
+
+const statusEl = document.getElementById('status');
+function note(msg) { statusEl.textContent = msg; }
+
+// ---------------------------------------------------------------- actions
+document.getElementById('save').onclick = () => {
+  saveOverrides(S); note('saved — the game will use these on next load');
+};
+document.getElementById('apply').onclick = () => {
+  saveOverrides(S); location.href = './index.html';
+};
+document.getElementById('copy').onclick = async () => {
+  const json = JSON.stringify(S, null, 2);
+  try { await navigator.clipboard.writeText(json); note('JSON copied to clipboard'); }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = json; panelsEl.prepend(ta); ta.select(); note('select and copy');
+  }
+};
+document.getElementById('load').onclick = () => {
+  const ta = document.createElement('textarea');
+  ta.placeholder = 'paste an exported JSON block here, then click again to apply';
+  const existing = document.getElementById('pastebox');
+  if (existing) {
+    try {
+      S = deepMerge(structuredClone(DEFAULTS), JSON.parse(existing.value));
+      existing.remove(); buildUi(); rebuildWorld(); applyLive(); note('loaded');
+    } catch (e) { note('could not parse that JSON: ' + e.message); }
+    return;
+  }
+  ta.id = 'pastebox'; panelsEl.prepend(ta); ta.focus();
+  note('paste JSON, then press PASTE JSON again');
+};
+document.getElementById('reset').onclick = () => {
+  S = structuredClone(DEFAULTS); clearOverrides();
+  buildUi(); rebuildWorld(); applyLive(); note('reset to shipped defaults');
+};
+
+// ---------------------------------------------------------------- camera
+let orbit = { yaw: 0.7, pitch: 0.85, dist: 17, tx: 0, ty: 1, tz: 0 };
+let drag = null;
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, b: e.button }; });
+window.addEventListener('mouseup', () => { drag = null; });
+window.addEventListener('mousemove', (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.b === 2) {
+    orbit.tx -= dx * 0.02 * Math.cos(orbit.yaw); orbit.tz -= dx * 0.02 * Math.sin(orbit.yaw);
+    orbit.ty += dy * 0.02;
+  } else {
+    orbit.yaw -= dx * 0.006;
+    orbit.pitch = Math.max(0.06, Math.min(1.5, orbit.pitch - dy * 0.005));
+  }
+});
+canvas.addEventListener('wheel', (e) => {
+  orbit.dist = Math.max(3, Math.min(50, orbit.dist * (1 + Math.sign(e.deltaY) * 0.1)));
+  e.preventDefault();
+}, { passive: false });
+
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  renderer.setSize(Math.max(2, r.width | 0), Math.max(2, r.height | 0));
+}
+window.addEventListener('resize', resize);
+
+// ---------------------------------------------------------------- loop
+const fpsEl = document.getElementById('fps');
+let last = 0, acc = 0, frames = 0;
+function tick(t) {
+  const dt = last ? (t - last) / 1000 : 1 / 60;
+  last = t;
+  acc += dt; frames++;
+  if (acc > 0.5) { fpsEl.textContent = `${(frames / acc).toFixed(0)} fps`; acc = 0; frames = 0; }
+
+  const h = Math.sin(orbit.pitch) * orbit.dist;
+  const rad = Math.cos(orbit.pitch) * orbit.dist;
+  camera.position.set(orbit.tx + Math.cos(orbit.yaw) * rad, orbit.ty + h, orbit.tz + Math.sin(orbit.yaw) * rad);
+  camera.lookAt(orbit.tx, orbit.ty, orbit.tz);
+  camera.updateMatrixWorld();
+  renderer.render(t / 1000);
+  requestAnimationFrame(tick);
+}
+
+buildUi();
+rebuildWorld();
+applyLive();
+resize();
+note('editing a copy — nothing changes in the game until you save or apply');
+requestAnimationFrame(tick);
+window.__STUDIO = { S, rebuildWorld, applyLive };
+</script>
+</body>
+</html>

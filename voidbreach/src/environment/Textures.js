@@ -15,6 +15,59 @@ const SIZE = 512;              // texels per tile
 const TILE = 2.5;              // metres per tile — one grid cell
 const PPM = SIZE / TILE;       // ~205 px per metre
 
+
+/**
+ * Every number that defines how the station looks, as DATA rather than as
+ * literals buried in drawing code. The Studio (studio.html) edits a copy of
+ * this and hands it back; the game merges any saved overrides at boot.
+ *
+ * Dimensions in metres are the construction language of DIRECTION §7 — change
+ * `panel` here and every wall in the sector changes with it.
+ */
+export const TEXTURE_DEFAULTS = {
+  steel: {
+    base: '#616a75', rough: 0.58, metal: 0.22,
+    panel: 1.25, seam: 0.008, inset: 0.04,
+    rivetSpacing: 0.30, rivetSize: 0.022,
+    scratches: 46, scratchBright: 0.28,
+    grime: 0.38, grimeTint: '#141a1e', streaks: true,
+    normalStrength: 2.0,
+  },
+  deck: {
+    base: '#5a626c', rough: 0.66, metal: 0.18,
+    plate: 1.25, tread: 0.125, treadStrength: 0.20,
+    scratches: 70, scratchBright: 0.22,
+    grime: 0.50, grimeTint: '#141a1e', streaks: false,
+    wear: 1.0,
+    normalStrength: 1.3,
+  },
+  painted: {
+    base: '#7a7d78', rough: 0.60, metal: 0.08,
+    rib: 0.20, chips: 150,
+    scratches: 60, scratchBright: 0.30,
+    grime: 0.55, grimeTint: '#2a2117', streaks: true,
+    normalStrength: 1.5,
+  },
+  ceramic: {
+    base: '#7d858c', rough: 0.80, metal: 0.02,
+    panel: 0.625,
+    scratches: 30, scratchBright: 0.18,
+    grime: 0.70, grimeTint: '#1b1a16', streaks: true,
+    normalStrength: 1.0,
+  },
+  flesh: {
+    base: '#43264a', rough: 0.34,
+    blotchScale: 4.5, veins: 26, veinColour: '#b43cc8',
+    pustules: 70, pustuleColour: '#d778eb',
+    normalStrength: 2.4,
+  },
+  hazard: {
+    colA: '#f0a63a', colB: '#16181c', pitch: 0.2,
+    rough: 0.58, metal: 0.10, grime: 0.55,
+    normalStrength: 0.6,
+  },
+};
+
 function canvas(size = SIZE) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
@@ -91,6 +144,11 @@ class TexGen {
 
     return { map, orm, normal };
   }
+}
+
+function hexToRgb(hex) {
+  const h = String(hex).replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
 function grey(v) { const c = Math.round(clamp01(v) * 255); return `rgb(${c},${c},${c})`; }
@@ -196,56 +254,56 @@ function scratches(g, count = 40, bright = 0.35) {
 }
 
 /** STEEL — the station's wall panel. 1.25 m panels, 40 mm rivets at 300 mm. */
-function steelWall(rng) {
+function steelWall(rng, p) {
   const g = new TexGen(rng);
-  g.base('#616a75', 0.55, 0.58, 0.22, 1.0);
-  const panel = g.m(1.25);
-  const seam = Math.max(2, g.m(0.008));
+  g.base(p.base, 0.55, p.rough, p.metal, 1.0);
+  const panel = g.m(p.panel);
+  const seam = Math.max(2, g.m(p.seam));
 
   // recessed panel field
   for (let py = 0; py < g.size; py += panel) {
     for (let px = 0; px < g.size; px += panel) {
-      const inset = g.m(0.04);
+      const inset = g.m(p.inset);
       g.h.fillStyle = grey(0.62);
       g.h.fillRect(px + inset, py + inset, panel - inset * 2, panel - inset * 2);
       const v = rng.range(-0.03, 0.05);
-      g.a.fillStyle = `rgba(${Math.round(97 + v * 255)},${Math.round(106 + v * 255)},${Math.round(117 + v * 255)},1)`;
+      const bc = hexToRgb(p.base);
+      g.a.fillStyle = `rgba(${Math.round(bc[0] + v * 255)},${Math.round(bc[1] + v * 255)},${Math.round(bc[2] + v * 255)},1)`;
       g.a.fillRect(px + inset, py + inset, panel - inset * 2, panel - inset * 2);
     }
   }
   // seams
   g.h.fillStyle = grey(0.30);
   g.a.fillStyle = 'rgba(14,18,23,0.95)';
-  for (let p = 0; p <= g.size; p += panel) {
-    g.h.fillRect(p - seam / 2, 0, seam, g.size);
-    g.h.fillRect(0, p - seam / 2, g.size, seam);
-    g.a.fillRect(p - seam / 2, 0, seam, g.size);
-    g.a.fillRect(0, p - seam / 2, g.size, seam);
+  for (let q = 0; q <= g.size; q += panel) {
+    g.h.fillRect(q - seam / 2, 0, seam, g.size);
+    g.h.fillRect(0, q - seam / 2, g.size, seam);
+    g.a.fillRect(q - seam / 2, 0, seam, g.size);
+    g.a.fillRect(0, q - seam / 2, g.size, seam);
   }
   // rivet lines along every seam
-  for (let p = 0; p <= g.size; p += panel) {
-    rivets(g, p + g.m(0.06), 0, p + g.m(0.06), g.size);
-    rivets(g, 0, p + g.m(0.06), g.size, p + g.m(0.06));
+  for (let q = 0; q <= g.size; q += panel) {
+    rivets(g, q + g.m(0.06), 0, q + g.m(0.06), g.size, p.rivetSpacing, p.rivetSize);
+    rivets(g, 0, q + g.m(0.06), g.size, q + g.m(0.06), p.rivetSpacing, p.rivetSize);
   }
-  scratches(g, 46, 0.28);
-  grimeAndWear(g, { grime: 0.38, seed: 7 });
-  return g.finish('steel', { normalStrength: 2.0 });
+  scratches(g, p.scratches, p.scratchBright);
+  grimeAndWear(g, { grime: p.grime, dirt: p.grimeTint, streaks: p.streaks, seed: 7 });
+  return g.finish('steel', { normalStrength: p.normalStrength });
 }
 
 /** DECK PLATE — 1.25 m plates, diamond tread, worn along traffic lines. */
-function deckPlate(rng) {
+function deckPlate(rng, p) {
   const g = new TexGen(rng);
-  g.base('#5a626c', 0.5, 0.66, 0.18, 1.0);
-  const plate = g.m(1.25);
-  // tread diamonds at 125 mm
-  const step = g.m(0.125);
+  g.base(p.base, 0.5, p.rough, p.metal, 1.0);
+  const plate = g.m(p.plate);
+  const step = g.m(p.tread);
   g.a.save(); g.h.save();
   for (let y = 0; y < g.size + step; y += step) {
     for (let x = 0; x < g.size + step; x += step) {
       const ox = ((y / step) | 0) % 2 ? step * 0.5 : 0;
       const cx = x + ox, cy = y;
       const r = step * 0.30;
-      for (const [ctx, fill] of [[g.a, 'rgba(120,130,142,0.20)'], [g.h, grey(0.70)]]) {
+      for (const [ctx, fill] of [[g.a, `rgba(120,130,142,${p.treadStrength})`], [g.h, grey(0.70)]]) {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(((x + y) / step | 0) % 2 ? 0.6 : -0.6);
@@ -259,28 +317,28 @@ function deckPlate(rng) {
   // plate seams
   g.h.fillStyle = grey(0.24);
   g.a.fillStyle = 'rgba(12,16,20,0.95)';
-  for (let p = 0; p <= g.size; p += plate) {
-    g.h.fillRect(p - 2, 0, 4, g.size); g.h.fillRect(0, p - 2, g.size, 4);
-    g.a.fillRect(p - 2, 0, 4, g.size); g.a.fillRect(0, p - 2, g.size, 4);
+  for (let q = 0; q <= g.size; q += plate) {
+    g.h.fillRect(q - 2, 0, 4, g.size); g.h.fillRect(0, q - 2, g.size, 4);
+    g.a.fillRect(q - 2, 0, 4, g.size); g.a.fillRect(0, q - 2, g.size, 4);
   }
   rivets(g, g.m(0.08), g.m(0.08), g.size - g.m(0.08), g.m(0.08), 0.4, 0.018);
   // traffic wear: a smoother, brighter band
   g.pixels((x, y, ad, hd, od, i) => {
-    const wear = clamp01(g.noise(x, y, 1.7, 3, 91) * 1.5 - 0.45);
+    const wear = clamp01(g.noise(x, y, 1.7, 3, 91) * 1.5 - 0.45) * p.wear;
     ad[i] += wear * 26; ad[i + 1] += wear * 28; ad[i + 2] += wear * 30;
     od[i + 1] = Math.max(0, od[i + 1] - wear * 90);
   });
-  scratches(g, 70, 0.22);
-  grimeAndWear(g, { grime: 0.5, streaks: false, seed: 13 });
-  return g.finish('deck', { normalStrength: 1.3 });
+  scratches(g, p.scratches, p.scratchBright);
+  grimeAndWear(g, { grime: p.grime, dirt: p.grimeTint, streaks: p.streaks, seed: 13 });
+  return g.finish('deck', { normalStrength: p.normalStrength });
 }
 
 /** PAINTED — containers, machinery housings. Tinted per mesh by vertex colour. */
-function paintedMetal(rng) {
+function paintedMetal(rng, p) {
   const g = new TexGen(rng);
-  g.base('#7a7d78', 0.55, 0.60, 0.08, 1.0);
+  g.base(p.base, 0.55, p.rough, p.metal, 1.0);
   // corrugation, the language of a shipping container
-  const rib = g.m(0.2);
+  const rib = g.m(p.rib);
   for (let x = 0; x < g.size; x += rib) {
     const grad = g.a.createLinearGradient(x, 0, x + rib, 0);
     grad.addColorStop(0, 'rgba(0,0,0,0.22)');
@@ -292,48 +350,51 @@ function paintedMetal(rng) {
     g.h.fillStyle = hg; g.h.fillRect(x, 0, rib, g.size);
   }
   // paint chips revealing steel
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < p.chips; i++) {
     const x = rng.next() * g.size, y = rng.next() * g.size;
     const r = rng.range(1.5, 9);
     g.a.fillStyle = `rgba(58,52,46,${rng.range(0.35, 0.85)})`;
     g.a.beginPath(); g.a.ellipse(x, y, r, r * rng.range(0.5, 1.4), rng.angle(), 0, Math.PI * 2); g.a.fill();
   }
-  scratches(g, 60, 0.3);
-  grimeAndWear(g, { grime: 0.55, seed: 23, dirt: '#2a2117' });
-  return g.finish('painted', { normalStrength: 1.5 });
+  scratches(g, p.scratches, p.scratchBright);
+  grimeAndWear(g, { grime: p.grime, seed: 23, dirt: p.grimeTint, streaks: p.streaks });
+  return g.finish('painted', { normalStrength: p.normalStrength });
 }
 
 /** CERAMIC — pale composite panelling for habitation and control spaces. */
-function ceramicPanel(rng) {
+function ceramicPanel(rng, p) {
   const g = new TexGen(rng);
-  g.base('#7d858c', 0.55, 0.80, 0.02, 1.0);
-  const panel = g.m(0.625);
+  g.base(p.base, 0.55, p.rough, p.metal, 1.0);
+  const panel = g.m(p.panel);
   g.a.strokeStyle = 'rgba(20,24,28,0.75)';
   g.a.lineWidth = 2;
   g.h.strokeStyle = grey(0.32); g.h.lineWidth = 3;
-  for (let p = 0; p <= g.size; p += panel) {
-    g.a.beginPath(); g.a.moveTo(p, 0); g.a.lineTo(p, g.size); g.a.stroke();
-    g.a.beginPath(); g.a.moveTo(0, p); g.a.lineTo(g.size, p); g.a.stroke();
-    g.h.beginPath(); g.h.moveTo(p, 0); g.h.lineTo(p, g.size); g.h.stroke();
-    g.h.beginPath(); g.h.moveTo(0, p); g.h.lineTo(g.size, p); g.h.stroke();
+  for (let q = 0; q <= g.size; q += panel) {
+    g.a.beginPath(); g.a.moveTo(q, 0); g.a.lineTo(q, g.size); g.a.stroke();
+    g.a.beginPath(); g.a.moveTo(0, q); g.a.lineTo(g.size, q); g.a.stroke();
+    g.h.beginPath(); g.h.moveTo(q, 0); g.h.lineTo(q, g.size); g.h.stroke();
+    g.h.beginPath(); g.h.moveTo(0, q); g.h.lineTo(g.size, q); g.h.stroke();
   }
-  scratches(g, 30, 0.18);
-  grimeAndWear(g, { grime: 0.7, seed: 37, dirt: '#1b1a16' });
-  return g.finish('ceramic', { normalStrength: 1.0 });
+  scratches(g, p.scratches, p.scratchBright);
+  grimeAndWear(g, { grime: p.grime, seed: 37, dirt: p.grimeTint, streaks: p.streaks });
+  return g.finish('ceramic', { normalStrength: p.normalStrength });
 }
 
 /** CHORUSFLESH — the infestation. Wet, violet, veined. Never used elsewhere. */
-function chorusFlesh(rng) {
+function chorusFlesh(rng, p) {
   const g = new TexGen(rng);
-  g.base('#43264a', 0.5, 0.34, 0.0, 0.85);
+  g.base(p.base, 0.5, p.rough, 0.0, 0.85);
+  const bc = hexToRgb(p.base);
+  const vc = hexToRgb(p.veinColour);
+  const pc = hexToRgb(p.pustuleColour);
   // blotchy mass
   g.pixels((x, y, ad, hd, od, i) => {
-    const n = g.noise(x, y, 4.5, 5, 5);
+    const n = g.noise(x, y, p.blotchScale, 5, 5);
     const n2 = g.noise(x, y, 14.0, 3, 55);
     const v = n * 0.8 + n2 * 0.2;
-    ad[i] = 40 + v * 90;
-    ad[i + 1] = 18 + v * 34;
-    ad[i + 2] = 48 + v * 92;
+    ad[i] = bc[0] * 0.6 + v * bc[0] * 1.3;
+    ad[i + 1] = bc[1] * 0.6 + v * bc[1] * 1.3;
+    ad[i + 2] = bc[2] * 0.6 + v * bc[2] * 1.3;
     hd[i] = hd[i + 1] = hd[i + 2] = 60 + v * 150;
     od[i + 1] = 40 + (1 - v) * 90;      // wetter in the hollows
     od[i] = 150 + v * 80;
@@ -341,7 +402,7 @@ function chorusFlesh(rng) {
   // veins: branching bright lines
   g.a.save();
   g.a.lineCap = 'round';
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < p.veins; i++) {
     let x = rng.next() * g.size, y = rng.next() * g.size;
     let a = rng.angle();
     let w = rng.range(1.5, 5);
@@ -352,15 +413,15 @@ function chorusFlesh(rng) {
       x += Math.cos(a) * 10; y += Math.sin(a) * 10;
       g.a.lineTo(x, y); g.h.lineTo(x, y);
     }
-    g.a.strokeStyle = `rgba(${180 + rng.int(0, 50)},${60},${200},0.30)`;
+    g.a.strokeStyle = `rgba(${vc[0] + rng.int(0, 40)},${vc[1]},${vc[2]},0.30)`;
     g.a.lineWidth = w; g.a.stroke();
     g.h.strokeStyle = grey(0.85); g.h.lineWidth = w * 1.2; g.h.stroke();
   }
   // pustules
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < p.pustules; i++) {
     const x = rng.next() * g.size, y = rng.next() * g.size, r = rng.range(3, 14);
     const grad = g.a.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
-    grad.addColorStop(0, 'rgba(215,120,235,0.55)');
+    grad.addColorStop(0, `rgba(${pc[0]},${pc[1]},${pc[2]},0.55)`);
     grad.addColorStop(1, 'rgba(60,20,70,0.0)');
     g.a.fillStyle = grad;
     g.a.beginPath(); g.a.arc(x, y, r, 0, Math.PI * 2); g.a.fill();
@@ -368,22 +429,23 @@ function chorusFlesh(rng) {
     g.h.beginPath(); g.h.arc(x, y, r * 0.7, 0, Math.PI * 2); g.h.fill();
   }
   g.a.restore();
-  return g.finish('flesh', { normalStrength: 2.4 });
+  return g.finish('flesh', { normalStrength: p.normalStrength });
 }
 
 /** HAZARD — 45 degree stripes at 200 mm. Tile is 1 m, not 2.5 m. */
-function hazardStripe(rng, colA = '#f0a63a', colB = '#16181c') {
+function hazardStripe(rng, p) {
   const g = new TexGen(rng, 256, 1.0);
-  g.base(colB, 0.6, 0.58, 0.10, 1.0);
-  const pitch = g.m(0.2);
+  const colA = p.colA, colB = p.colB;
+  g.base(colB, 0.6, p.rough, p.metal, 1.0);
+  const pitch = g.m(p.pitch);
   g.a.save();
   g.a.translate(g.size / 2, g.size / 2); g.a.rotate(Math.PI / 4); g.a.translate(-g.size, -g.size);
   g.a.fillStyle = colA;
   for (let x = 0; x < g.size * 2; x += pitch * 2) g.a.fillRect(x, 0, pitch, g.size * 2);
   g.a.restore();
   scratches(g, 24, 0.25);
-  grimeAndWear(g, { grime: 0.55, streaks: false, seed: 77 });
-  return g.finish('hazard', { normalStrength: 0.6 });
+  grimeAndWear(g, { grime: p.grime, streaks: false, seed: 77 });
+  return g.finish('hazard', { normalStrength: p.normalStrength });
 }
 
 /** SCREEN — emissive console face. Returns an extra emissive map. */
@@ -532,15 +594,22 @@ function decalAtlas(rng) {
   return t;
 }
 
-export function buildTextures(rng) {
+/**
+ * @param params  material parameter set; defaults to TEXTURE_DEFAULTS. The
+ *                Studio passes an edited copy, and GAME merges any saved
+ *                overrides (ignored in deterministic runs — see Overrides.js).
+ */
+export function buildTextures(rng, params) {
   const r = rng.child('textures');
+  const P = params || TEXTURE_DEFAULTS;
+  const m = (k) => ({ ...TEXTURE_DEFAULTS[k], ...(P[k] || {}) });
   return {
-    steel: steelWall(r),
-    deck: deckPlate(r),
-    painted: paintedMetal(r),
-    ceramic: ceramicPanel(r),
-    flesh: chorusFlesh(r),
-    hazard: hazardStripe(r),
+    steel: steelWall(r, m('steel')),
+    deck: deckPlate(r, m('deck')),
+    painted: paintedMetal(r, m('painted')),
+    ceramic: ceramicPanel(r, m('ceramic')),
+    flesh: chorusFlesh(r, m('flesh')),
+    hazard: hazardStripe(r, m('hazard')),
     screen: screenFace(r),
     poolPlain: lightPool(r, false),
     poolGrate: lightPool(r, true),
