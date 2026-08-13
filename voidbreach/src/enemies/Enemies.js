@@ -44,6 +44,7 @@ export class Enemies {
     this.nestId = new Int16Array(CAP);
     this.alerted = new Uint8Array(CAP);
     this.orphaned = new Uint8Array(CAP);
+    this.strand = new Float32Array(CAP);
 
     this.hash = new SpatialHash(0, 0, sector.grid.width, sector.grid.depth, 2.5, CAP);
     this.killCount = 0;
@@ -114,6 +115,7 @@ export class Enemies {
     this.nestId[i] = opts.nestId ?? -1;
     this.alerted[i] = opts.alerted ? 1 : 0;
     this.orphaned[i] = 0;
+    this.strand[i] = 0;
     this.events.emit('enemySpawned', { id: i, kind: kindId, x, z });
     return i;
   }
@@ -325,8 +327,22 @@ export class Enemies {
           // APPROACH / FLANK / RANGED
           const useFlank = (this.state[i] === ST.FLANK);
           const field = useFlank ? flank : flow;
-          if (field.sample(this.x[i], this.z[i], out)) { desiredX = out.x; desiredY = out.z; }
-          else { desiredX = dirX; desiredY = dirZ; }
+          if (field.sample(this.x[i], this.z[i], out)) {
+            desiredX = out.x; desiredY = out.z;
+            this.strand[i] = 0;
+          } else {
+            desiredX = dirX; desiredY = dirZ;
+            // No route to the player at all. Give it a while — doors cycle, the
+            // player moves — then let it withdraw. A single unreachable
+            // straggler must never stop a room from feeling cleared.
+            this.strand[i] += dt;
+            if (this.strand[i] > 14 && distToPlayer > 12) {
+              this.events.emit('enemyWithdrew', { id: i, kind: this.kind[i], x: this.x[i], z: this.z[i] });
+              this.list.release(i);
+              alive--;
+              continue;
+            }
+          }
 
           if (a.kind === KIND.SPITTER) {
             // Hold at preferred range and shoot; back off if crowded.

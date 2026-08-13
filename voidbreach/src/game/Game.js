@@ -179,13 +179,31 @@ export class Game {
     return list;
   }
 
-  updatePickups(dt, time) {
-    const m4 = new THREE.Matrix4();
+  /**
+   * Collection is SIMULATION, not presentation. It used to live in present(),
+   * which meant the test was only sampled once per rendered frame: at 60 steps
+   * per frame the operator walked straight through a medkit without touching
+   * it, and at a low frame rate a real player would too.
+   */
+  collectPickups() {
+    if (!this.player.alive) return;
     for (const p of this.pickups) {
       if (p.taken) continue;
-      const d = Math.hypot(p.x - this.player.x, p.z - this.player.z);
-      if (d < 1.2 && this.player.alive && this.tryPickup(p)) {
-        p.taken = true;
+      const dx = p.x - this.player.x, dz = p.z - this.player.z;
+      if (dx * dx + dz * dz > 2.25) continue;      // 1.5 m
+      if (!this.tryPickup(p)) continue;
+      p.taken = true;
+      p.dirty = true;
+    }
+  }
+
+  /** Presentation only: bob, spin, and retire collected items. */
+  updatePickups(dt, time) {
+    const m4 = this._pickupM4 || (this._pickupM4 = new THREE.Matrix4());
+    for (const p of this.pickups) {
+      if (p.taken) {
+        if (!p.dirty) continue;
+        p.dirty = false;
         m4.makeScale(0.001, 0.001, 0.001);
         m4.setPosition(p.x, -5, p.z);
         p.mesh.setMatrixAt(p.index, m4);
@@ -374,7 +392,9 @@ export class Game {
       audio.nestRupture(e);
       this.stats.nestDeaths.push(this.clock.simTime);
       this.stats.enemiesAtNestDeath.push(this.enemies.aliveNow || 0);
-      this._reliefProbe = { t: this.clock.simTime, before: this.enemies.aliveNow || 0 };
+      if (this.stats.nestDeaths.length === 1) {
+        this._reliefProbe = { t: this.clock.simTime, before: this.enemies.aliveNow || 0 };
+      }
     });
 
     ev.on('nestSpawn', (e) => {
@@ -471,6 +491,8 @@ export class Game {
         this.player.damage(9 * dt, 0, 0);
       }
     }
+
+    this.collectPickups();
 
     this.vfx.update(dt, time);
     this.vfx.spawnDust(dt, this.player.x, this.player.z, this.player.aimX, this.player.aimZ,

@@ -83,13 +83,13 @@ export const HELIX_DEEP = {
     // Deliberately tough and fast-breeding: the player must arrive INTO pressure,
     // not clear the room and then poke a sack. Tuned against gates X3/X4/X6.
     { id: 'n_cargo', type: 'brood',  x: 40, z: 4,  room: 'cargo', hp: 430, face: 'z-',
-      budget: { rate: 0.95, max: 20, burst: 10, mix: ['runner', 'runner', 'runner', 'spitter'] } },
+      budget: { rate: 0.8, max: 24, burst: 14, mix: ['runner', 'runner', 'runner', 'spitter'] } },
     { id: 'n_proc_a', type: 'colony', x: 53, z: 29, room: 'proc', hp: 340, face: 'z-',
       budget: { rate: 1.25, max: 16, burst: 4, mix: ['runner', 'runner', 'stalker', 'bulwark'] } },
     { id: 'n_proc_b', type: 'brood',  x: 76, z: 43, room: 'proc', hp: 380, face: 'x+',
       budget: { rate: 1.15, max: 16, burst: 4, mix: ['runner', 'spitter', 'spitter', 'stalker'] } },
-    { id: 'n_pump',   type: 'colony', x: 12, z: 57, room: 'pump', hp: 420, face: 'z+',
-      budget: { rate: 1.0, max: 14, burst: 5, mix: ['stalker', 'runner', 'bulwark'] } },
+    { id: 'n_pump',   type: 'colony', x: 12, z: 57, room: 'pump', hp: 340, face: 'z+',
+      budget: { rate: 1.15, max: 11, burst: 5, mix: ['stalker', 'runner', 'stalker', 'runner'] } },
   ],
 
   // Wall vents: enemy ingress the player cannot use. Placed to enable flanking

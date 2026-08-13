@@ -30,7 +30,7 @@ export class Nests {
     this.list = [];
     this.remaining = 0;
     this.active = false;      // director gates spawning
-    this.globalCap = 28;      // living Chorus ceiling across the whole sector
+    this.globalCap = 26;      // living Chorus ceiling across the whole sector
 
     this.material = new THREE.MeshStandardMaterial({
       color: 0x5a2d63, roughness: 0.42, metalness: 0.0,
@@ -154,7 +154,7 @@ export class Nests {
       const dist = Math.hypot(px - n.x, pz - n.z);
       // A nest wakes with its own part of the station. Two nests in one hall
       // both live from 60 m away is double pressure the player never chose.
-      if (dist > 45) continue;
+      if (dist > 32) continue;
 
       // Waking: the first sight of a node comes with a brood already on its
       // feet, so the player walks into pressure rather than into an empty room.

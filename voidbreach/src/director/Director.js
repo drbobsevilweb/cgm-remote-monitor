@@ -82,7 +82,10 @@ export class Director {
     this.waveTimer -= dt;
     if (this.waveTimer <= 0) {
       this.waveTimer = 24 + this.rng.range(-4, 8);
-      if (this.relief <= 0 && player.health01 > 0.45 && near < 9 && this.nests.remaining > 0) {
+      const liveNear = this.nests.list.filter((n) => n.alive && n.woken &&
+        Math.hypot(n.x - player.x, n.z - player.z) < 40).length;
+      if (this.relief <= 0 && player.health01 > 0.55 && near < 8 && liveNear <= 1 &&
+          this.nests.remaining > 0) {
         this.ventWave(player);
       }
     }

@@ -75,6 +75,8 @@ export class Harness {
     this.lastPos = { x: game.player.x, z: game.player.z };
     this.wanderAngle = 0;
     this.unreachable = new Set();
+    this.progressAt = 0;
+    this.progressMark = '';
 
     const ev = game.events;
     ev.on('tankDetonated', () => { this.tankFired = true; });
@@ -105,7 +107,7 @@ export class Harness {
     const wantHeal = p.health01 < 0.62;
     const wantAmmo = g.weapons.reserve < 170;
     if (wantHeal || wantAmmo) {
-      let best = null, bd = 95;
+      let best = null, bd = 30;   // grab what you pass, do not cross the sector
       for (const item of g.pickups) {
         if (item.taken) continue;
         if (item.kind === 'medkit' && !wantHeal) continue;
@@ -286,6 +288,14 @@ export class Harness {
 
     this.trackBeats(dt);
     this.checkShot();
+    // Stall watchdog: if neither the beats nor the operator's position have
+    // moved in 45 s of simulation, the run is wedged. Report it as a stall
+    // rather than hanging the gauntlet with no result at all.
+    const mark = `${this.beats.size}|${[...this.beats.values()].filter((b) => b.done).length}` +
+      `|${Math.round(p.x / 4)}|${Math.round(p.z / 4)}|${g.nests.remaining}|${g.stats.kills}`;
+    if (mark !== this.progressMark) { this.progressMark = mark; this.progressAt = this.time; }
+    else if (this.time - this.progressAt > 45) this.finish('stalled');
+
     if (this.time > 420 && !this.done) this.finish('timeout');
     if (g.mode === 'won') this.finish('exit');
     if (g.mode === 'dead') this.finish('died');
