@@ -49,9 +49,14 @@ export class Broods {
     this.active = false;      // director gates laying
     this.globalCap = 26;      // living Chorus ceiling across the whole sector
 
+    // She is lit BY the violet, she is not made of it. At emissiveIntensity 0.55
+    // — inherited from the old static nest prop, which had no light of its own
+    // sitting inside it — her own emitter blew her surface out to pale pink and
+    // every form cue on her went with it. The light says "something is here";
+    // her surface has to say what.
     this.fleshMat = new THREE.MeshStandardMaterial({
-      color: 0x5a2d63, roughness: 0.42, metalness: 0.0,
-      emissive: new THREE.Color(PAL.violet), emissiveIntensity: 0.55,
+      color: 0x4a2652, roughness: 0.46, metalness: 0.0,
+      emissive: new THREE.Color(PAL.violet), emissiveIntensity: 0.22,
     });
     // The hood is mineral, not meat. Reading as a different material is the
     // entire job: it is what makes "shoot her somewhere else" legible.
@@ -118,9 +123,11 @@ export class Broods {
   /** LIGHTING registers each queen as a persistent violet emitter. */
   registerLights(lighting) {
     for (const q of this.list) {
+      // Under her, not inside her: an emitter at body height lights her own
+      // surface at point-blank range and clips before it reaches the floor.
       q.emitter = lighting.addEmitter({
-        x: q.x, y: 1.8, z: q.z, color: PAL.violet,
-        intensity: 40, radius: 16,
+        x: q.x, y: 0.55, z: q.z, color: PAL.violet,
+        intensity: 28, radius: 17,
       });
     }
     this.lighting = lighting;
@@ -205,6 +212,12 @@ export class Broods {
   hitTest(x, z, radius) {
     for (const q of this.list) {
       if (!q.alive) continue;
+      // Deliberately a little larger than she looks. Tightening these to hug
+      // the silhouette was tried and measured: it cost 25% of the radius, the
+      // autopilot's time-on-target against every queen went up, and the run died
+      // at 89 s instead of reaching the exit at 194 s. A target the player is
+      // meant to circle *while* a room fills up should be forgiving to hit; the
+      // difficulty in this fight is the movement, not the aim.
       const r = (q.type === 'matriarch' ? 2.4 : 2.0) + radius;
       if ((q.x - x) ** 2 + (q.z - z) ** 2 <= r * r) return q;
     }
@@ -228,12 +241,16 @@ export class Broods {
     this.eggsAlive = 0;
 
     const shellMat = new THREE.MeshStandardMaterial({
-      color: 0x6a4a72, roughness: 0.34, metalness: 0.0,
-      emissive: new THREE.Color(PAL.violet), emissiveIntensity: 0.14,
+      color: 0x5b3f63, roughness: 0.38, metalness: 0.0,
+      emissive: new THREE.Color(PAL.violet), emissiveIntensity: 0.10,
     });
-    // The core is the readable part and it is meant to blow out into bloom.
+    // The core carries the incubation ramp. It must stay VIOLET while doing it:
+    // at 3.2x it went straight through the AgX shoulder to white-pink, which
+    // reads as plastic and, worse, stops meaning "Chorus" — violet is a
+    // meaning-colour (DIRECTION §5.5) and a light that desaturates to white is
+    // no longer carrying it. 1.35x sits inside the shoulder and still blooms.
     const coreMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(PAL.violet), toneMapped: true });
-    coreMat.color.multiplyScalar(3.2);
+    coreMat.color.multiplyScalar(1.35);
 
     this.eggShellMesh = new THREE.InstancedMesh(g.shell, shellMat, EGG_CAP);
     this.eggCoreMesh = new THREE.InstancedMesh(g.core, coreMat, EGG_CAP);
@@ -362,7 +379,7 @@ export class Broods {
       // she rocks forward as she pushes, and flinches when hit
       q.group.rotation.x = Math.pow(phase, 6) * 0.09 - q.hurt * 0.05;
       q.body.rotation.y = Math.sin(time * 0.4 + q.index) * 0.05;
-      if (q.emitter) q.emitter.intensity = 26 + 52 * Math.pow(phase, 4) + q.hurt * 50;
+      if (q.emitter) q.emitter.intensity = 18 + 34 * Math.pow(phase, 4) + q.hurt * 34;
 
       if (!this.active) continue;
 

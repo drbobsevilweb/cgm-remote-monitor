@@ -206,7 +206,12 @@ export function buildArchetypeGeometry(archetype) {
  */
 export function buildQueenGeometry(type, rng) {
   const heavy = type === 'matriarch';
-  const s = heavy ? 1.22 : 1.0;
+  // Metres, and they matter. The first pass built her at s=1.22, which put the
+  // abdomen alone at over four metres across once the lay swell was applied —
+  // next to a 1.9 m operator she stopped reading as an animal and started
+  // reading as scenery. A matriarch is now about the size of a small car:
+  // unmistakably the largest thing in the room, still obviously a creature.
+  const s = heavy ? 0.80 : 0.66;
 
   // --- hood: layered mineral plates, wider than she is
   const hood = new MeshBuilder();
@@ -275,14 +280,14 @@ export function buildQueenGeometry(type, rng) {
 export function buildEggGeometry() {
   const shell = new MeshBuilder();
   shell.setColor(0.88, 0.82, 0.94);
-  shell.addCylinder(0, 0.32, 0, 0.34, 0.62, 9, true, true, 1);
-  shell.addCylinder(0, 0.02, 0, 0.42, 0.16, 9, true, true, 1);
-  shell.addCylinder(0, 0.70, 0, 0.16, 0.20, 7, true, true, 1);
+  shell.addCylinder(0, 0.24, 0, 0.25, 0.46, 9, true, true, 1);
+  shell.addCylinder(0, 0.02, 0, 0.31, 0.12, 9, true, true, 1);
+  shell.addCylinder(0, 0.52, 0, 0.12, 0.15, 7, true, true, 1);
   shell.setColor(1, 1, 1);
 
   const core = new MeshBuilder();
   core.setColor(1, 1, 1);
-  core.addCylinder(0, 0.34, 0, 0.22, 0.42, 8, true, true, 1);
+  core.addCylinder(0, 0.26, 0, 0.15, 0.30, 8, true, true, 1);
 
   return { shell: shell.build('egg_shell'), core: core.build('egg_core') };
 }

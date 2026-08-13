@@ -345,6 +345,7 @@ export class Game {
           if (t < bestT) { bestT = t; hit = { ref, kind, t: Math.max(0, t) }; }
         };
         for (const q of self.broods.list) {
+          // see Broods.hitTest: deliberately forgiving, and measured
           if (q.alive) check(q.x, q.z, q.type === 'matriarch' ? 2.0 : 1.7, q, 'queen');
         }
         const b = self.broods;
