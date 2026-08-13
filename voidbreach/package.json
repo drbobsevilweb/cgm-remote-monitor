@@ -1,20 +1,25 @@
 {
   "name": "voidbreach",
   "version": "1.0.0",
-  "description": "VOIDBREACH — top-down sci-fi horde shooter",
+  "description": "VOIDBREACH \u2014 top-down sci-fi horde shooter. Zero binary assets; three.js only.",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
     "serve": "node tools/serve.mjs",
-    "gauntlet": "node tools/run-gauntlet.mjs"
+    "gauntlet": "node tools/run-gauntlet.mjs",
+    "check": "node tools/check-deps.mjs && node tools/check-determinism.mjs && node tools/check-geometry.mjs && node tools/level-check.mjs",
+    "validators": "node tools/validate-validators.mjs",
+    "replay": "node tools/replay.mjs 1337 820000",
+    "capture": "node tools/capture.mjs",
+    "validate": "node tools/validate.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "three": "^0.185.1"
-  },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
 }

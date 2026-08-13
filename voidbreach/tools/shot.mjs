@@ -1,12 +1,13 @@
 // Dev capture: node tools/shot.mjs <url-query> <outfile>
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { getChromium, HEADLESS_GL_ARGS } from './browser.mjs';
+const chromium = await getChromium();
 
 const query = process.argv[2] || '';
 const out = process.argv[3] || '/tmp/shot.png';
 const page18 = process.argv.includes('--wait');
 
 const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  args: HEADLESS_GL_ARGS,
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];

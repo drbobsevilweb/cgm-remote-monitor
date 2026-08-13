@@ -1,8 +1,9 @@
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { getChromium, HEADLESS_GL_ARGS } from './browser.mjs';
+const chromium = await getChromium();
 const query = process.argv[2] || '';
 const out = process.argv[3] || '/tmp/game.png';
 const waitMs = +(process.argv[4] || 8000);
-const b = await chromium.launch({args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--mute-audio']});
+const b = await chromium.launch({args: HEADLESS_GL_ARGS});
 const p = await b.newPage({viewport:{width:1280,height:720}});
 const errs=[];
 p.on('pageerror', e=>errs.push('PAGEERROR: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n')));

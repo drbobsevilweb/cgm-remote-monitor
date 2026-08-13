@@ -3,7 +3,8 @@
 // TEST_PLAN §6: a golden image must never be taken from a contaminated browser
 // state, so every shot gets its own context and its own deterministic run.
 
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { getChromium, HEADLESS_GL_ARGS } from './browser.mjs';
+const chromium = await getChromium();
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -17,7 +18,7 @@ const W = 1600, H = 900;
 fs.mkdirSync(OUT, { recursive: true });
 
 const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio'],
+  args: HEADLESS_GL_ARGS,
 });
 
 const report = { seed: SEED, shots: {} };
