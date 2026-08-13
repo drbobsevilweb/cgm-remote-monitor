@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOIDBREACH</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #05070a;
+    font-family: "Inter", "Helvetica Neue", Arial, sans-serif; color: #dfe8f2; }
+  canvas { display: block; position: absolute; inset: 0; }
+  #view { z-index: 0; }
+  #hud { z-index: 1; pointer-events: none; }
+  #stats { position: absolute; top: 8px; right: 12px; z-index: 2; margin: 0;
+    font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    color: #9fe7ff; background: rgba(4,8,12,0.62); padding: 8px 10px;
+    border: 1px solid rgba(95,216,255,0.22); white-space: pre; pointer-events: none; }
+  #keys { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    z-index: 2; font-size: 11px; letter-spacing: 0.09em; color: rgba(200,214,230,0.34);
+    pointer-events: none; transition: opacity 0.6s ease; }
+  body.playing #keys { opacity: 0; }
+</style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <canvas id="hud"></canvas>
+  <div id="keys">WASD MOVE &nbsp;·&nbsp; MOUSE AIM &nbsp;·&nbsp; LMB FIRE &nbsp;·&nbsp; RMB FRAG &nbsp;·&nbsp; SPACE DASH &nbsp;·&nbsp; R RELOAD &nbsp;·&nbsp; F LIGHT</div>
+  <script type="module" src="./src/game/Main.js"></script>
+  <script>
+    // Fade the control hint once the operator actually moves.
+    const fade = (e) => {
+      if (['KeyW','KeyA','KeyS','KeyD'].includes(e.code)) {
+        document.body.classList.add('playing');
+        window.removeEventListener('keydown', fade);
+      }
+    };
+    window.addEventListener('keydown', fade);
+  </script>
+</body>
+</html>

@@ -61,6 +61,25 @@ export class Sector {
     }
     for (let i = 0; i < g.n; i++) if (wallMask[i]) cells[i] = C.WALL;
 
+    // 2b. Mark exterior walls: a wall cell that touches unassigned VOID is part
+    //     of the outer hull. Those are built tall, because at 14.6 m the camera
+    //     would otherwise see straight over them into nothing.
+    this.exterior = new Uint8Array(g.n);
+    for (let cz = 0; cz < g.rows; cz++) {
+      for (let cx = 0; cx < g.cols; cx++) {
+        const i = cz * g.cols + cx;
+        if (cells[i] !== C.WALL) continue;
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = cx + dx, nz = cz + dz;
+            if (!g.inBounds(nx, nz)) { this.exterior[i] = 1; continue; }
+            const j = nz * g.cols + nx;
+            if (cells[j] === C.VOID && g.zone[j] === 255) this.exterior[i] = 1;
+          }
+        }
+      }
+    }
+
     // 3. Pits: holes in the deck. Grating is stamped back over them next.
     for (const p of this.pits) g.fill(p.x, p.z, p.w, p.h, C.VOID);
 

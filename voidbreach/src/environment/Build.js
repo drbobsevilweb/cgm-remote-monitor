@@ -204,11 +204,15 @@ export class Environment {
           if (nc !== C.WALL && nc !== C.VENT) continue;
           const shade = 0.94 + ((cx * 7 + cz * 13) % 5) * 0.022;
           wallB.setColor(shade, shade, shade);
+          // Hull walls run to 12 m. The camera sits at 14.6 m, so a 3.2 m wall
+          // at the edge of the station would show the player empty space.
+          const hull = s.exterior && s.exterior[g.idx(nx, nz)];
+          const top = hull ? Math.max(ceil, 12) : ceil;
           // face plane sits on the boundary, normal points into the room
-          if (d === 0) wallB.addQuad(x1, 0, z0, x1, ceil, z1, -1, 0, 0, 1);
-          if (d === 1) wallB.addQuad(x0, 0, z0, x0, ceil, z1, 1, 0, 0, 1);
-          if (d === 2) wallB.addQuad(x0, 0, z1, x1, ceil, z1, 0, 0, -1, 1);
-          if (d === 3) wallB.addQuad(x0, 0, z0, x1, ceil, z0, 0, 0, 1, 1);
+          if (d === 0) wallB.addQuad(x1, 0, z0, x1, top, z1, -1, 0, 0, 1);
+          if (d === 1) wallB.addQuad(x0, 0, z0, x0, top, z1, 1, 0, 0, 1);
+          if (d === 2) wallB.addQuad(x0, 0, z1, x1, top, z1, 0, 0, -1, 1);
+          if (d === 3) wallB.addQuad(x0, 0, z0, x1, top, z0, 0, 0, 1, 1);
           wallB.setColor(1, 1, 1);
 
           // kick plate: 350 mm of scuffed steel at the bottom of every wall
