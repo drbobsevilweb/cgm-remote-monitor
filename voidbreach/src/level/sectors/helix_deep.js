@@ -249,6 +249,11 @@ export const HELIX_DEEP = {
 
   objectives: [
     { id: 'o_start', text: 'REACH CARGO HALL A', kind: 'reach', room: 'cargo' },
+    // Between arriving and being told what to kill there is now a step where
+    // the player does not know yet. Entering the hall used to print KILL THE
+    // BROOD QUEEN before she had made a sound — the game answering its own
+    // question at the moment it should have been asking it.
+    { id: 'o_sweep', text: 'LOCATE THE SOURCE — CARGO HALL A', kind: 'sweep' },
     { id: 'o_node1', text: 'KILL THE BROOD QUEEN', kind: 'queen', queen: 'q_cargo' },
     { id: 'o_purge', text: 'PURGE THE SECTOR — QUEENS REMAINING: {n}', kind: 'queens' },
     { id: 'o_exit',  text: 'REACH THE REACTOR LIFT', kind: 'reach', room: 'reactor' },

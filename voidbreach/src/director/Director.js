@@ -30,6 +30,10 @@ export class Director {
     broods.active = true;
 
     events.on('queenKilled', (e) => this.onQueenKilled(e));
+    // The objective names her only once she has announced herself.
+    events.on('queenStirred', () => {
+      if (this.objective && this.objective.kind === 'sweep') this.advanceObjective();
+    });
     events.on('beat', (e) => this.beats.add(e.name));
     this.advanceObjective();
   }

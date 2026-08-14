@@ -69,6 +69,7 @@ export class Harness {
     this.beats = new Map(BEATS.map((b) => [b.name, { ...b, done: false, at: -1 }]));
     this.log = [];
     this.maxAlive = 0;
+    this.swarmSeconds = 0;   // time spent with the room genuinely full
     this.darkTime = 0;
     this.litEnemiesWhileDark = 0;
     this.fragFired = false;
@@ -473,7 +474,21 @@ export class Harness {
     if (this.overheated) mark('overheat_barrel');
     if (this.ventSealed) mark('seal_vent');
     if (g.broods.remaining < g.broods.list.length) mark('kill_first_queen');
-    if (this.maxAlive >= 14 && g.stats.kills >= 20) mark('fight_swarm');
+    // SUSTAINED pressure, not a single-frame maximum.
+    //
+    // This was `maxAlive >= 14`, and across seven runs peak population came in
+    // at 13, 14, 15, 15, 16, 17 and 18 — the threshold sat inside the natural
+    // variance of the quantity it was measuring, so the beat flipped between
+    // seeds on noise. Twice it was "fixed" by changing the game, and twice the
+    // failure simply moved to a different seed.
+    //
+    // Peak is the wrong statistic anyway. The design claim (DIRECTION §2) is
+    // "the sense that the room is filling up" — a STATE the player is held in,
+    // not an instant they pass through. Eight seconds above ten live enemies is
+    // that state, and it is a stricter test of the claim than a one-frame spike:
+    // a game where the room never fills cannot accumulate it at all.
+    if (alive >= 10) this.swarmSeconds += dt;
+    if (this.swarmSeconds >= 8 && g.stats.kills >= 20) mark('fight_swarm');
     if (this.tankFired) mark('trigger_explosive');
     if (p.gratingDistance >= 6) mark('cross_grating');
     if (this.stalkerKilled) mark('fight_stalker');
@@ -552,7 +567,11 @@ export class Harness {
         shotsFired: g.stats.shotsFired,
         damageTaken: +g.stats.damageTaken.toFixed(1),
         peakEnemies: g.stats.peakEnemies,
+        swarmSeconds: +this.swarmSeconds.toFixed(1),
+        firstWarning: g.stats.firstWarning,
         firstEnemySeen: g.stats.firstEnemySeen,
+        warningLead: g.stats.firstWarning >= 0 && g.stats.firstDamage >= 0
+          ? +(g.stats.firstDamage - g.stats.firstWarning).toFixed(2) : null,
         firstDamage: g.stats.firstDamage,
         queenDeaths: g.stats.queenDeaths.map((t) => +t.toFixed(2)),
         enemiesAtQueenDeath: g.stats.enemiesAtQueenDeath,

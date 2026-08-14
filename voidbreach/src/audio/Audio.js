@@ -322,6 +322,16 @@ export class Audio {
     } else if (type === 'die') {
       this.tone(out, t, 0.42, 260 + this.rng.range(-40, 40), 48, 'sawtooth', 0.4);
       this.noiseBurst(out, t, 0.25, 500, 0.9, 'lowpass', 0.5);
+    } else if (type === 'stir') {
+      // Heard across a hall, through structure, before anything is visible.
+      // Low, wet and unhurried — it is not a threat display, it is the sound of
+      // something large deciding to pay attention. It has to survive being
+      // played at 30 m, so it lives almost entirely under 200 Hz where the
+      // machinery ambience is thin.
+      this.tone(out, t, 1.5, 74, 46, 'sawtooth', 0.42);
+      this.tone(out, t + 0.18, 1.1, 112, 62, 'triangle', 0.24);
+      this.noiseBurst(out, t + 0.30, 0.75, 260, 0.8, 'lowpass', 0.30);
+      this.noiseBurst(out, t + 1.05, 0.45, 180, 0.7, 'lowpass', 0.22);
     } else if (type === 'idle') {
       // runners chitter high and fast; stalkers click low and stop before striking
       if (kind === 1) {

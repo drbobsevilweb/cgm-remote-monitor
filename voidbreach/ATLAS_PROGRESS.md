@@ -80,21 +80,21 @@ gated by an automated QA apparatus.
 - **E1** 15/15 beats on seed 1337: PASS
 - **E2** same seed twice, under deliberately different machine load: PASS, identical to the frame
 - **X6** relief ratio: PASS (0.000 / 0.067 / 0.000 on samples of 12–15)
-- **E3** multi-seed: **FAILING — seed 777 dies at 114 s**
+- **E3** multi-seed: **PASS** — 15/15 on 1337, 4242 and 777 (see §8)
 
 ---
 
 ## 2. WHAT IS PARTIAL OR BROKEN
 
-### E3 is red (highest-priority existing defect)
+### E3 — was red, now green
 
-Seed 777 dies in the Processing hall — the only room in the sector with **two
-queens**. It plays correctly and loses. This is also where the game's core loop
-is structurally compromised: killing one of two live sources cannot deliver the
-relief the design promises. Three candidate fixes are costed in TEST_PLAN §6e;
-choosing between them is an authoring decision.
+Seed 777 died in the Processing hall. **Resolved** by the opening-pacing work in
+§8: giving every queen a warning stage before she begins producing spreads the
+onset of Processing's two encounters apart in time. All three seeds now complete.
 
-**This is a red gate that any new direction would be built on top of.**
+The structural observation stands and is worth carrying forward: Processing is
+the only room with two live sources, and killing one of two cannot fully deliver
+the relief the loop promises. That is future authoring work, not an open defect.
 
 ### Shared spatial truth — Atlas §6 is *mostly* satisfied, with one scar
 
@@ -219,9 +219,10 @@ Per Atlas §26. Each of these is working, load-bearing, and expensive to replace
 Atlas §1 demands one answer, so: **it depends on a direction decision that is not
 mine to make**, and the two candidates are far apart.
 
-**If this project stays solo:** fix the E3 failure in the Processing hall. It is a
-red gate, it is the one room where the core loop is structurally broken, and
-everything else is polish on top of it.
+**If this project stays solo:** the next target is the **aftermath beat** (Atlas
+§13-I). The opening now has warning, investigation and contact; what it does not
+have is the silence afterwards. Gunfire stops and the game moves straight on.
+§29 says horror needs contrast, and the back half of the cycle is missing.
 
 **If this project becomes ALIIENS with a four-marine squad:** the first thing to
 build is **not** the squad. It is **enemy target selection for multiple targets**,
@@ -234,7 +235,80 @@ should actually play the build.**
 
 ---
 
-## 8. A NOTE ON THE WORKING TITLE
+## 8. ITERATION 1 — THE OPENING HAD NO WARNING
+
+**Objective (Atlas §32).** Make the first playable corridor encounter feel
+substantially closer to a finished commercial game.
+
+**Method.** Not a screenshot. I recorded every player-facing event in the first
+42 seconds of a real run and read the timeline. That turned out to be the right
+instrument, because the defect was in *time*, and no still frame could have shown
+it.
+
+**Symptom, before diagnosis (§19).** The recorded opening:
+
+```
+10.13s  enter CARGO HALL A     +  objective: "KILL THE BROOD QUEEN"
+10.68s  queen wakes            +  eggs begin dropping
+11.55s  first enemy alive
+12.45s  seven enemies, plus a heat warning
+```
+
+The player crosses a threshold and is in a fight **1.4 seconds later**, having
+had no opportunity to look at the room. Every measured gate passed while this was
+true: first threat seen 11.6 s, first damage 14.5 s, both inside their windows.
+The numbers were satisfied by putting the threat *on top of the player* rather
+than at a distance.
+
+**Three biggest experience-breaking weaknesses, ranked.**
+
+1. **No warning before first contact.** The emotional cycle the direction is
+   built on — confidence → uncertainty → warning → investigation → contact — was
+   executing as confidence → contact. Beats B, C and E of the Atlas vertical
+   slice were absent entirely.
+2. **The objective named the answer before the player had the question.** "KILL
+   THE BROOD QUEEN" printed at the instant of room entry, before she had moved,
+   made a sound, or been seen.
+3. **Everything arrived at once.** Wake, clutch, hatching, gunfire and a barrel
+   overheat inside two seconds. No silence to contrast against (§29).
+
+All three share one root cause: **the encounter had no pacing structure. The wake
+was instantaneous and co-located with the reveal.**
+
+**Fix (highest-impact only).** Waking is now two stages.
+
+- **STIRRING** is the warning. She becomes audible across the hall (a new low,
+  wet vocalisation that survives 30 m because it lives under 200 Hz), her light
+  swells once, and the warning beacons in her part of the sector go red — all
+  while she produces *nothing*. The window is 6.5 s, shortening to 3.0 s if the
+  player walks straight at her, because a player who charges a noise has chosen
+  to skip the anticipation and should be allowed to.
+- A single **herald** — one stalker, spawned unalerted at the far end of the
+  space — gives the "silhouette at distance" moment. This is what the 60-second
+  contract had asked for since it was written and never actually delivered: a
+  threat *seen* at range before a threat that is on top of you. It also keeps
+  gate X1 honest rather than gaming it.
+- **AWAKE** then drops the clutch as before.
+- The objective gains an intermediate step, `LOCATE THE SOURCE — CARGO HALL A`,
+  and only names her when she stirs.
+
+**Result.** The recorded opening is now:
+
+```
+10.13s  enter CARGO HALL A     +  objective: "LOCATE THE SOURCE"
+10.68s  MOVEMENT — BEARING UNCONFIRMED   (sound, light, beacons red)
+        objective becomes "KILL THE BROOD QUEEN"
+11.77s  one scout, at distance
+13.68s  queen wakes, clutch drops
+14.55s  first hatch
+14.60s  first damage
+```
+
+Anticipation window: **zero → 3.9 seconds** on an autopilot that walks straight
+at threats, and 6.5 s for a player who does not. A new stat, `warningLead`, is
+carried in the run report so this cannot silently regress.
+
+## 9. A NOTE ON THE WORKING TITLE
 
 The prompt sets the title *A L I I E N S*, styles the two central "I" characters
 as an illuminated feature, and separately requires (§31, and the title section

@@ -65,6 +65,9 @@ export class Game {
       firstEnemySeen: -1, firstDamage: -1, peakEnemies: 0,
       queenDeaths: [], enemiesAtQueenDeath: [],
       eggsKilled: 0, ventsSealed: 0, forcedVents: 0,
+      // The anticipation window: how long the player had between the first
+      // warning that something was there and the first thing reaching them.
+      firstWarning: -1,
     };
   }
 
@@ -573,9 +576,22 @@ export class Game {
       light.pulse(e.x, e.y, e.z, PAL.violet, 120, 8, 0.16);
     });
 
-    // The walls know before the player does. A queen waking raises the alarm in
-    // her part of the station, so the corridor ahead turns red while the room
-    // the player is standing in is still quiet.
+    // The walls know before the player does. The alarm goes up when she STIRS,
+    // not when she wakes — so the corridor ahead is already red while she is
+    // still only a sound, and the player gets to decide whether to walk into it.
+    ev.on('queenStirred', (e) => {
+      this.env.setAlarm(e.x, e.z, 34, true);
+      // Sound before sight (the first thing that happens is that you hear her).
+      audio.chorus(KIND.BULWARK, e.x, e.z, 'stir');
+      // Her light swells once and settles: something in there moved.
+      light.pulse(e.x, 1.2, e.z, PAL.violet, 700, 22, 0.9);
+      this.events.emit('message', { text: 'MOVEMENT — BEARING UNCONFIRMED', tone: 'warn', ttl: 3.2 });
+      // First, not latest: every queen stirs, and assigning unconditionally
+      // left this holding the last one in the sector — a warning lead of minus
+      // two minutes, which is the instrument reporting nonsense rather than the
+      // game doing something strange.
+      if (this.stats.firstWarning < 0) this.stats.firstWarning = this.clock.simTime;
+    });
     ev.on('queenWoke', (e) => this.env.setAlarm(e.x, e.z, 34, true));
     ev.on('queenKilled', (e) => this.env.setAlarm(e.x, e.z, 34, false));
 

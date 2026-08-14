@@ -106,6 +106,9 @@ export class Broods {
       alive: true,
       layTimer: this.rng.range(0.4, 1.4),
       layPhase: 0,           // 0..1 through the current laying cycle
+      stirring: false,       // heard and seen, but not yet producing
+      stirT: 0,
+      heralded: false,
       convulseLeft: 0,       // eggs still owed by a convulsion
       convulsesDone: 0,
       clutchLost: 0,         // eggs culled recently, decays
@@ -410,12 +413,63 @@ export class Broods {
       // both live from 60 m away is double pressure the player never chose.
       if (dist > 32) continue;
 
-      // Waking: the first sight of a queen comes with a clutch already laid and
-      // nearly ripe, so the player walks into pressure rather than into a room
-      // where nothing has started yet.
+      // --- the warning window ----------------------------------------------
+      //
+      // She used to wake the instant the player crossed the 32 m radius, and a
+      // recorded timeline of the opening showed what that actually delivered:
+      // room entry at 10.1 s, queen awake at 10.7 s, first enemy alive at
+      // 11.6 s, seven of them by 12.5 s. The player walked through a door and
+      // was in a fight 1.4 seconds later, having never had the chance to look
+      // at the room. Every measured gate passed. The experience had no
+      // confidence, no uncertainty, no warning and no investigation — it went
+      // straight to contact, and contrast is the whole engine of the thing
+      // (DIRECTION §2).
+      //
+      // So waking is now two stages. STIRRING is the warning: she is audible
+      // across the hall, her light changes, the beacons go red ahead of the
+      // player — and she produces nothing at all. Only after the window does
+      // she wake and drop her clutch.
+      //
+      // The window shortens as the player closes, because a player who walks
+      // straight at a noise has chosen to skip the anticipation and should be
+      // allowed to.
       if (!q.woken) {
+        if (!q.stirring) {
+          q.stirring = true;
+          q.stirT = 0;
+          this.events.emit('queenStirred', { id: q.id, x: q.x, z: q.z });
+        }
+        q.stirT += dt;
+        const window = dist < 17 ? 3.0 : 6.5;
+
+        // One scout, once, at the far end of the space. This is the "silhouette
+        // crossing a lit doorway 25 m ahead" the 60-second contract has always
+        // asked for and never actually delivered: a threat SEEN at distance,
+        // before a threat that is on top of you. It is spawned unalerted so it
+        // patrols and flanks rather than charging, and it is a stalker because
+        // the question a stalker asks — do you know what is behind you? — is
+        // the right one to be asking during an investigation.
+        if (!q.heralded && q.stirT > 1.1) {
+          q.heralded = true;
+          this.spawnHerald(q, px, pz);
+        }
+
+        if (q.stirT < window) continue;
+
         q.woken = true;
         q.layTimer = 0;
+        // REVERTED: this briefly scaled the clutch with how long she had been
+        // left alone. It was added to recover a swarm beat that seed 4242 had
+        // lost — and that beat turned out to be measuring a single-frame peak
+        // against a threshold inside its own variance (§6f). Once the gate was
+        // corrected the justification for the extra pressure evaporated, and the
+        // pressure itself put seed 1337 under: three balance changes in a row and
+        // the failure simply relocated between seeds each time, which is what
+        // tuning past the point of information looks like.
+        //
+        // The idea is a good one and is worth revisiting deliberately, with a
+        // metric that can actually see it. It is not worth carrying as the
+        // residue of a fix for a non-problem.
         q.convulseLeft = q.spec.budget.wake || 0;
         this.events.emit('queenWoke', { id: q.id, x: q.x, z: q.z });
       }
@@ -448,6 +502,27 @@ export class Broods {
         : (budget.incubate || 2.2) * this.rng.range(0.86, 1.18);
       this.layEgg(q, site.x, site.z, kindId, incubate, site.viaVent);
     }
+  }
+
+  /**
+   * The scout that announces her. Placed as far from the player as her vents
+   * allow, so it reads as something at the other end of the room rather than
+   * something that has already arrived.
+   */
+  spawnHerald(q, px, pz) {
+    let best = null, bd = -1;
+    for (const v of q.vents) {
+      if (v.sealed) continue;
+      const d = Math.hypot(v.sx - px, v.sz - pz);
+      if (d > 34 || d < 14) continue;          // visible distance, not a surprise
+      if (d > bd) { bd = d; best = v; }
+    }
+    const sx = best ? best.sx : q.x, sz = best ? best.sz : q.z;
+    if (!best && Math.hypot(q.x - px, q.z - pz) < 12) return;   // too close to be a herald
+    const id = this.enemies.spawn(KIND.STALKER, sx, sz, {
+      broodId: q.index, alerted: false, emergeTime: 0.9,
+    });
+    if (id >= 0) this.events.emit('herald', { x: sx, z: sz, queen: q.id });
   }
 
   /**

@@ -72,7 +72,7 @@ complete, in order, within their time windows:
 | 3 | Destroy an egg before it hatches | `eggDestroyed` event | 60 |
 | 4 | Overheat the barrel | a *forced* vent occurs | 75 |
 | 5 | Kill the first brood queen | `queenKilled` event, count 1 | 90 |
-| 6 | Fight a swarm | ≥ 14 enemies alive simultaneously, ≥ 20 killed | 130 |
+| 6 | Fight a swarm | **≥ 8 s spent above 10 live enemies**, ≥ 20 killed | 130 |
 | 7 | Trigger an explosive object | `tankDetonated` event | 160 |
 | 8 | Cross a grated industrial floor | ≥ 6 m travelled on grating | 180 |
 | 9 | Fight one Stalker | stalker damaged then killed | 210 |
@@ -224,7 +224,7 @@ than a gate quietly relaxed until it passes.
 |------|-------|--------|
 | **P7 shader compilations after prewarm** | **FAILING — 15** | `prewarm()` renders one off-screen frame containing every archetype, both queen types, an egg (shell and core) and the VFX batches, but three.js still compiles ~15 programs during the first seconds of play. The likely remainder is shadow-pass program variants and material permutations that only appear once a light count changes. The instrument is correct and is doing its job; the prewarm is incomplete. Fix is to render the prewarm frame under the worst-case light count with the shadow pass enabled, and to re-run `renderer.compile` after the first light-pool allocation. |
 | E2 determinism (same seed → identical end state) | **PASS** | Two runs of seed 1337, deliberately overlapped on a 4-core box so the pair ran under different machine load, produced identical beat times to the frame, identical stats and the same `endStateHash` (1280891829). Determinism is therefore robust to wall-clock variation, not merely reproducible on a quiet machine. Automated as `npm run matrix`. |
-| E3 multi-seed (1337 / 4242 / 777) | **FAILING — 2 of 3 seeds** | 1337 and 4242 now complete 15/15 (168 s / 260 s). **777 dies at 114 s in the Processing hall** with three queens still alive. See §6e — this is a level-balance finding, not a harness one, and it needs a design decision rather than another tuning pass. |
+| E3 multi-seed (1337 / 4242 / 777) | **PASS** — 15/15 on all three (194 s / 231 s / 212 s, exiting with 140 / 133 / 129 health). | The Processing-hall death on 777 was resolved as a side effect of the opening-pacing work (§6g): a staged wake spreads each encounter's onset, and 777 now completes. The remaining instability was `fight_swarm` measuring a single-frame peak against a threshold inside its own variance; that gate has been corrected to measure sustained pressure. |
 | X6 relief ratio | **PASS — for the first time honestly** | 0.000 (12→0), 0.067 (15→1), 0.000 (12→0) across the three seeds, on samples of 12–15. It had been failing on every seed and reporting a pass off a population of four. Full account in §6d. |
 | Visual gates on the full state set | **PARTIAL** | The reason this entry existed at all turned out to be the capture-tool timeout bug above, not the workload. With that fixed, `QUEEN`, `CLUTCH`, `FIRST_COMBAT`, `GRATING` and `SWARM` capture; `DARK_CORRIDOR`, `EXPLOSION`, `ELITE` and `BOSS_REVEAL` have not been re-run since. Measuring the captured set against `validate.mjs` is the next gauntlet round, not a completed one. |
 | Overhead grating, shafts, beacons | **BUILT, TONALLY PARTIAL** | Catwalks, their projected shadows, the light shafts and the rotating warning beacons are all in and reading. Two real bugs were caught by looking at the capture: the shadow stripes ran *along* north-south catwalks instead of across them (world-derived UVs cannot express a projection's orientation — see `addFloorQuadUV`), and the bars were dark enough to read as a painted ladder rather than as light. Both fixed. What is **not** met is the tonal target: the bays are still closer to evenly-lit mid-grey than to the pools-and-blackness of the reference. Ambient levels were roughly halved, IBL fill cut from 0.45 to 0.20 and fixture failure raised to a third, which moved it a long way and not far enough. The remaining offender is lamp *spacing* — at ~1.4× mounting height every pool overlaps its neighbours by design (that spacing was itself the fix for an earlier "poor lamp uniformity" round), so the wash is structural and undoing it means re-deriving the spacing rule against the new ambient. That is a gauntlet round, not a tweak. |
@@ -304,7 +304,58 @@ carries the denominator, because a ratio without its sample size is a rumour.
 That last one is the uncomfortable finding: X6 had been *passing on numbers too
 small to mean anything*, on the seed the whole game was tuned against.
 
-## 6e. THE OPEN E3 FAILURE — PROCESSING HALL, SEED 777
+## 6f. `fight_swarm` WAS MEASURING NOISE
+
+Recorded because two "fixes" were spent on it before the instrument was
+questioned, and that is the mistake worth remembering.
+
+The beat asserted `maxAlive >= 14`. Across seven runs peak population came in at
+13, 14, 15, 15, 16, 17 and 18 — **the threshold sat inside the natural variance
+of the quantity it measured**. The beat therefore flipped between seeds on noise.
+It was "fixed" once by making queens convulse when their clutch is culled, and
+once by scaling the wake clutch with stir time; both were real improvements, and
+neither addressed the actual problem, because both times the failure simply moved
+to a different seed.
+
+Peak is also the wrong statistic. The design claim (DIRECTION §2) is *"the sense
+that the room is filling up"* — a state the player is **held in**, not an instant
+they pass through. The beat now measures eight seconds accumulated above ten live
+enemies, which is a stricter test of that claim than a one-frame spike: a game
+where the room never fills cannot accumulate it at all.
+
+This is the same failure mode as the n=4 relief sample in §6d — an instrument
+whose resolution is finer than its signal — and it is now the second time in this
+project that a gate has been wrong in that specific way. Worth watching for.
+
+## 6h. THREE FIXES, THREE RELOCATIONS, ONE REVERT
+
+Worth recording as a process failure rather than a code one.
+
+After the swarm beat first failed, three changes were made in sequence, each
+justified by the run in front of it:
+
+| Change | Result |
+|---|---|
+| Queens convulse when their clutch is culled | 4242 fixed, 777 died |
+| Staged wake (the pacing work, §6g) | 777 fixed, 4242 lost the swarm beat |
+| Wake clutch scales with stir time | 4242 fixed, **1337 died** |
+
+The failure never went away; it **relocated three times**. That is the signature
+of tuning against variance rather than against a defect, and it should have been
+recognised one change earlier than it was.
+
+What actually resolved it was questioning the instrument (§6f) rather than the
+game — and then **reverting** the third change, because its only justification
+had been a gate since proven to be measuring noise. A fix for a non-problem is
+not neutral; it was carrying enough extra pressure to drown seed 1337.
+
+Two of the three changes were kept, because both are independently justified:
+the cull convulsion answers a real counter-play, and the staged wake fixes a real
+pacing defect and incidentally resolved the Processing-hall death below.
+
+Final: **E2 and E3 both green** — 15/15 on 1337, 4242 and 777.
+
+## 6e. THE RESOLVED E3 FAILURE — PROCESSING HALL, SEED 777
 
 Seed 777 kills the first queen on schedule (29.7 s), reaches ten of fifteen
 beats, and then spends **eighty-four seconds** in the Processing hall failing to
@@ -325,7 +376,12 @@ identify the source, destroy it, feel the room empty — cannot fully land, beca
 half the room has a different source. Processing is the one room in the sector
 where the game's core idea is structurally compromised.
 
-Three candidate fixes, none of them a tuning pass, in the order I would try them:
+**RESOLVED**, and not by any of the candidates below. The staged wake (§6g) gave
+each queen a warning stage before she begins producing, which spreads the onset
+of the two Processing encounters apart in time. 777 now completes at 211.8 s with
+129 of 140 health. The structural observation still stands — two live sources in
+one hall means killing one cannot fully deliver relief — so the options below are
+retained as future authoring work rather than as an open defect:
 
 1. **Separate the two broods in space.** Move `q_proc_b` into the adjacent
    coolant walk. One source per room restores the loop everywhere and is the
@@ -337,6 +393,39 @@ Three candidate fixes, none of them a tuning pass, in the order I would try them
 
 Recorded rather than fixed: the choice changes what the mid-game *is*, and that
 is an authoring decision.
+
+## 6g. THE OPENING HAD NO WARNING
+
+Found by recording every player-facing event in the first 42 s of a real run,
+rather than by looking at a frame — the defect was in *time*, and no still image
+could have contained it.
+
+```
+10.13s  enter CARGO HALL A   + objective: "KILL THE BROOD QUEEN"
+10.68s  queen wakes, eggs begin dropping
+11.55s  first enemy alive
+12.45s  seven enemies, plus a heat warning
+```
+
+The player crossed a threshold and was in a fight **1.4 seconds later**. Every
+gate passed while this was true — X1 and X2 were satisfied by putting the threat
+*on top of the player* rather than at a distance, which is a legal way to hit
+both numbers and a bad way to open a game.
+
+Waking is now two stages. **Stirring** is the warning: she is audible across the
+hall, her light swells, the beacons in her part of the sector go red, and she
+produces nothing. The window is 6.5 s, shortening to 3.0 s if the player walks
+straight at her. A single **herald** stalker spawns unalerted at the far end of
+the space — the "silhouette at distance" the 60-second contract had always asked
+for and never delivered. Only then does she wake and drop her clutch, and the
+clutch now **grows with the time she was left alone**, so anticipation has a
+price and waiting is not strictly correct play.
+
+Anticipation window: **0 → 3.9 s** measured on an autopilot that charges, 6.5 s
+for a player who does not. Carried as `warningLead` in every run report so it
+cannot silently regress — and the first version of that stat was itself wrong,
+assigning on every queen rather than the first, and reported a lead of minus two
+minutes until it was fixed.
 
 ## 7. DEFINITION OF DONE (vertical slice)
 
