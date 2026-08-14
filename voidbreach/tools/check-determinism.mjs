@@ -18,7 +18,26 @@ const ALLOW = {
   'game/Main.js': 'requestAnimationFrame driver',
   'audio/Audio.js': 'WebAudio schedules against the audio context clock',
   'game/Game.js': 'boot timing and loading screen only',
+  // Gesture recognition is wall-clock BY DEFINITION: a tap is 240 ms of real
+  // time whether the machine renders at 20 fps or 200. This entry is only safe
+  // because the replay harness never constructs Input at all — it builds an
+  // InputFrame itself and calls game.step directly — so no wall-clock reading
+  // in this file can reach a deterministic run. That claim is asserted below
+  // rather than trusted, because an allowlist entry that depends on a property
+  // nobody checks is how a gate quietly stops being a gate.
+  'input/Input.js': 'gesture timing; unreachable from the replay path (asserted)',
 };
+
+// The allowlist entry for input/Input.js is conditional on this staying true.
+const ASSERTIONS = [
+  {
+    file: 'qa/Replay.js',
+    mustNotMatch: /\bnew\s+Input\s*\(/,
+    why: 'the replay harness must never construct Input — it builds its own ' +
+         'InputFrame. If it does, wall-clock gesture timing reaches the ' +
+         'deterministic path and the input/Input.js allowlist entry is invalid.',
+  },
+];
 
 const BANNED = [
   { re: /\bMath\.random\s*\(/g, what: 'Math.random()' },
@@ -64,6 +83,14 @@ function lineNumber(src, index) {
   let n = 1;
   for (let i = 0; i < index; i++) if (src.charCodeAt(i) === 10) n++;
   return n;
+}
+
+// Verify the conditions the allowlist depends on.
+for (const a of ASSERTIONS) {
+  let src = '';
+  try { src = fs.readFileSync(path.join(SRC, a.file), 'utf8'); }
+  catch { violations.push(`${a.file}  missing; cannot verify allowlist assertion`); continue; }
+  if (a.mustNotMatch.test(src)) violations.push(`${a.file}  ${a.why}`);
 }
 
 console.log('DETERMINISM: SIMULATION PATH\n');

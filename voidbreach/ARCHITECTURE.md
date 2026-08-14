@@ -191,3 +191,5 @@ Decision 8 remains in force for the slice. The relevant change is that the *reas
 it is no longer "squad AI would dilute the loop" alone, it is now also that the four operator
 archetypes are the natural co-op roster (MULTIPLAYER.md), and building them as AI companions
 first would be work thrown away. They stay authored data and unbuilt behaviour.
+
+| 13 | Control schemes are INPUT-only | Mouse-only and touch both produce the same `InputFrame` every other scheme produces, and the world queries they need (pathing to a clicked point, "is anything worth shooting on this bearing") arrive as callbacks from GAME rather than as imports. INPUT still does not touch the world, the replay harness still never constructs INPUT, and determinism is untouched — the harness builds its own `InputFrame` and calls `game.step` directly. The gesture timer's wall-clock reads are allowlisted in `check-determinism.mjs` on that basis, and the allowlist entry is guarded by an assertion that fails if the harness ever constructs INPUT. | Locked |

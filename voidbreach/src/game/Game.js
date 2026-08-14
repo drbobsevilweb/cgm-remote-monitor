@@ -11,9 +11,10 @@ import { Events } from '../core/Events.js';
 import { Rng } from '../core/Rng.js';
 import { Renderer } from '../renderer/Renderer.js';
 import { pickQuality } from '../renderer/Quality.js';
-import { Input } from '../input/Input.js';
+import { Input, SCHEME } from '../input/Input.js';
 import { Sector } from '../level/Sector.js';
 import { HELIX_DEEP } from '../level/sectors/helix_deep.js';
+import { Field } from '../level/Nav.js';
 import { Environment } from '../environment/Build.js';
 import { Lighting } from '../lighting/Lighting.js';
 import { Vfx } from '../vfx/Vfx.js';
@@ -114,6 +115,14 @@ export class Game {
     this.broods.registerLights(this.lighting);
     this.renderer.scene.add(this.broods.root);
     this.env.buildVentSeals();
+
+    // Click-to-move pathing. Its own flow field, rebuilt only when the player
+    // picks a new destination — the two fields LEVEL already owns are anchored
+    // to the operator and rebuilt every tick, which is the wrong shape for a
+    // goal that changes once a second at most.
+    this.pointerField = new Field(this.sector.grid);
+    this.pointerField.bakeCost(4);
+    this.pointerGoalCell = -1;
 
     this.pickups = this.buildPickups();
     this.director = new Director(this.sector, this.enemies, this.broods, this.events, this.rng);
@@ -679,6 +688,81 @@ export class Game {
     this.pendingDetonations = [];
   }
 
+  // ------------------------------------------------------- pointer navigation
+  /**
+   * Turn a clicked destination into a movement direction that respects walls.
+   *
+   * The field is rebuilt only when the destination cell changes. A goal on a
+   * solid cell (the player clicked a wall, or a crate) snaps outward to the
+   * nearest open cell rather than failing — clicking the wall beside a doorway
+   * should walk you to the doorway, not refuse.
+   */
+  steerToward(goal, px, pz, out) {
+    const grid = this.sector.grid;
+    let cx = Math.floor(goal.x / CELL), cz = Math.floor(goal.z / CELL);
+    if (!grid.inBounds(cx, cz)) return false;
+    if (!grid.walkableCell(cx, cz)) {
+      let found = false;
+      for (let r = 1; r <= 3 && !found; r++) {
+        for (let dz = -r; dz <= r && !found; dz++) {
+          for (let dx = -r; dx <= r && !found; dx++) {
+            if (grid.walkableCell(cx + dx, cz + dz)) { cx += dx; cz += dz; found = true; }
+          }
+        }
+      }
+      if (!found) return false;
+    }
+    const cell = cz * grid.cols + cx;
+    if (cell !== this.pointerGoalCell) {
+      this.pointerGoalCell = cell;
+      const src = this._pointerSrc || (this._pointerSrc = new Int32Array(1));
+      src[0] = cell;
+      this.pointerField.build(src, 1);
+    }
+    if (this.pointerField.sample(px, pz, out)) return true;
+    // Inside the goal cell itself the field has no gradient; close the last
+    // metre on the straight line.
+    const dx = goal.x - px, dz = goal.z - pz;
+    const d = Math.hypot(dx, dz);
+    if (d < 1e-3) return false;
+    out.x = dx / d; out.z = dz / d;
+    return true;
+  }
+
+  /**
+   * Is anything worth shooting on this bearing? Used by the touch scheme's
+   * hold-to-fire assist.
+   *
+   * Deliberately generous on angle and strict on sight: a finger cannot aim to
+   * a degree, but it should never be able to shoot something through a wall.
+   */
+  hostileInLine(px, pz, ax, az, maxDist = 26, cosTol = 0.90) {
+    const grid = this.sector.grid;
+    const e = this.enemies;
+    const lined = (tx, tz) => {
+      const dx = tx - px, dz = tz - pz;
+      const d = Math.hypot(dx, dz);
+      if (d > maxDist || d < 0.001) return false;
+      if ((dx / d) * ax + (dz / d) * az < cosTol) return false;
+      return grid.lineOfSight(px, pz, tx, tz);
+    };
+    for (let k = 0; k < e.list.count; k++) {
+      const i = e.list.active[k];
+      if (e.state[i] === 7 /* DYING */) continue;
+      if (lined(e.x[i], e.z[i])) return true;
+    }
+    // Queens and clutches are targets too — a player holding on a clutch should
+    // be shooting it, and it is the cheapest answer in the game.
+    for (const q of this.broods.list) {
+      if (q.alive && lined(q.x, q.z)) return true;
+    }
+    const b = this.broods;
+    for (let i = 0; i < b.eggCount; i++) {
+      if (b.eggAlive[i] && lined(b.eggX[i], b.eggZ[i])) return true;
+    }
+    return false;
+  }
+
   // ---------------------------------------------------------------- picking
   groundPick(ndcX, ndcY) {
     this._ndc.set(ndcX, ndcY);
@@ -692,7 +776,11 @@ export class Game {
   frame(realDelta) {
     this.profiler.beginFrame();
     const steps = this.clock.begin(realDelta);
-    const inputFrame = this.input.sample(this.player.x, this.player.z, (x, y) => this.groundPick(x, y));
+    const inputFrame = this.input.sample(
+      this.player.x, this.player.z,
+      (x, y) => this.groundPick(x, y),
+      (goal, px, pz, out) => this.steerToward(goal, px, pz, out),
+      (px, pz, ax, az) => this.hostileInLine(px, pz, ax, az));
     this.tickFrame(steps, inputFrame);
     this.profiler.endFrame(this.clock.realDelta);
   }
@@ -881,6 +969,12 @@ export class Game {
       eggsAlive: this.broods.eggsAlive,
       queenDir, kills: this.stats.kills, time,
       cursorX: screen.x, cursorY: screen.y,
+      // Where the operator has been told to walk. Without this, click-to-move
+      // is a character wandering off for reasons the player has to remember.
+      moveGoal: this.input.goal
+        ? this.worldToScreen(this.input.goal.x, 0.05, this.input.goal.z) : null,
+      scheme: this.input.scheme,
+      assistFiring: !!this.input.assistFiring,
     };
   }
 

@@ -427,6 +427,44 @@ cannot silently regress — and the first version of that stat was itself wrong,
 assigning on every queen rather than the first, and reported a lead of minus two
 minutes until it was fixed.
 
+## 6i. CONTROL SCHEMES — WHAT WAS VERIFIED, AND THE BUG IT FOUND
+
+Both new schemes were driven through **real pointer and touch events** in a real
+browser, not by calling methods (Atlas §20 draws exactly this distinction).
+Measured in *simulation* time rather than wall time, because headless renders at
+about one frame a second and a wall-clock measurement of movement there says
+nothing.
+
+| Case | Result |
+|---|---|
+| Mouse: click to move | 9.15 m travelled in 2 sim s (≈ operator speed) |
+| Mouse: right click fires | 10 shots in 1 sim s (545 rpm ⇒ 9.1/s) |
+| Mouse: left click must NOT fire | 0 shots |
+| Touch: auto-detection on a coarse-pointer viewport | `touch` |
+| Touch: tap to move | 10.64 m in 2 sim s |
+| Touch hold, **no target** | 0 shots — withholds |
+| Touch hold, **target in line of sight** | fires, kills it |
+| Touch hold, **target out of line of sight** | 0 shots |
+| Touch release | trigger and hold both clear |
+
+The out-of-sight and release cases were the ones worth writing, because they
+caught a real defect: **`InputFrame.reset()` clears the edge flags but not the
+held `fire` / `secondary` states.** The keyboard and mouse paths assign those
+unconditionally every sample, so they were safe by accident. The touch path only
+assigns `fire` when it decides to shoot — so the trigger **latched on**, and the
+operator kept firing through walls and after the finger had left the glass.
+`sample()` now zeroes both before dispatching to a scheme.
+
+Two testing notes, recorded because both wasted time:
+
+- A first pass concluded click-to-move was broken (0.27 m in 1.4 s). It was not:
+  headless runs at ~1 fps, and pointer movement only re-steers once per rendered
+  frame. **Wall-clock measurement of a sim-time quantity is not a measurement.**
+- A second pass concluded everything was broken (0 shots from every input). That
+  was the test harness: Playwright evaluates a *string* `pageFunction` as an
+  expression and ignores the argument, so the frame-stepping loop was never
+  called. The game was fine; the instrument had not run.
+
 ## 7. DEFINITION OF DONE (vertical slice)
 
 - V0, S1–S4, E1–E4, F1–F11 pass.

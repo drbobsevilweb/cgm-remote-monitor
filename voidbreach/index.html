@@ -18,6 +18,10 @@
     letter-spacing: .12em; color: rgba(200,214,230,0.30); text-decoration: none;
     border: 1px solid rgba(200,214,230,0.14); padding: 4px 9px; }
   #studio:hover { color: #ffb45a; border-color: rgba(255,180,90,0.5); }
+  #scheme { position: absolute; right: 92px; bottom: 10px; z-index: 3; font-size: 10px;
+    letter-spacing: .12em; color: rgba(200,214,230,0.30); text-decoration: none;
+    border: 1px solid rgba(200,214,230,0.14); padding: 4px 9px; }
+  #scheme:hover { color: #5fd8ff; border-color: rgba(95,216,255,0.5); }
   #keys { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
     z-index: 2; font-size: 11px; letter-spacing: 0.09em; color: rgba(200,214,230,0.34);
     pointer-events: none; transition: opacity 0.6s ease; }
@@ -28,17 +32,50 @@
   <canvas id="view"></canvas>
   <canvas id="hud"></canvas>
   <a id="studio" href="./studio.html">STUDIO</a>
-  <div id="keys">WASD MOVE &nbsp;·&nbsp; MOUSE AIM &nbsp;·&nbsp; LMB FIRE &nbsp;·&nbsp; RMB FRAG &nbsp;·&nbsp; SPACE DASH &nbsp;·&nbsp; R VENT HEAT &nbsp;·&nbsp; F LIGHT</div>
+  <div id="keys"></div>
+  <a id="scheme" href="#" title="Switch control scheme">CONTROLS</a>
   <script type="module" src="./src/game/Main.js"></script>
-  <script>
-    // Fade the control hint once the operator actually moves.
-    const fade = (e) => {
-      if (['KeyW','KeyA','KeyS','KeyD'].includes(e.code)) {
-        document.body.classList.add('playing');
-        window.removeEventListener('keydown', fade);
-      }
+  <script type="module">
+    import { SCHEME } from './src/input/Input.js';
+
+    const HINT = {
+      keyboard: 'WASD MOVE &nbsp;·&nbsp; MOUSE AIM &nbsp;·&nbsp; LMB FIRE &nbsp;·&nbsp; RMB FRAG &nbsp;·&nbsp; SPACE DASH &nbsp;·&nbsp; R VENT &nbsp;·&nbsp; F LIGHT',
+      mouse:    'CLICK MOVE &nbsp;·&nbsp; CURSOR AIM &nbsp;·&nbsp; RIGHT-CLICK FIRE &nbsp;·&nbsp; MIDDLE FRAG &nbsp;·&nbsp; DOUBLE-CLICK DASH',
+      touch:    'TAP MOVE &nbsp;·&nbsp; HOLD TO TURN &amp; FIRE &nbsp;·&nbsp; TWO FINGERS FRAG &nbsp;·&nbsp; DOUBLE-TAP DASH',
     };
-    window.addEventListener('keydown', fade);
+    const keys = document.getElementById('keys');
+    const link = document.getElementById('scheme');
+    const order = [SCHEME.KEYBOARD, SCHEME.MOUSE, SCHEME.TOUCH];
+
+    function show(s) {
+      keys.innerHTML = HINT[s] || HINT.keyboard;
+      link.textContent = s.toUpperCase();
+      document.body.classList.remove('playing');
+    }
+    // The game publishes its Input once booted; until then show the detected one.
+    const initial = new URLSearchParams(location.search).get('controls');
+    show(initial && HINT[initial] ? initial : detect());
+    function detect() {
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const noHover = matchMedia('(hover: none)').matches;
+      return (coarse && noHover) ? SCHEME.TOUCH : SCHEME.KEYBOARD;
+    }
+
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const g = window.__GAME;
+      if (!g || !g.input) return;
+      const next = order[(order.indexOf(g.input.scheme) + 1) % order.length];
+      g.input.setScheme(next);
+      show(next);
+    });
+
+    // Fade the hint once the operator actually does something.
+    const fade = () => { document.body.classList.add('playing'); };
+    window.addEventListener('keydown', (e) => {
+      if (['KeyW','KeyA','KeyS','KeyD'].includes(e.code)) fade();
+    });
+    document.getElementById('view').addEventListener('pointerdown', fade);
   </script>
 </body>
 </html>

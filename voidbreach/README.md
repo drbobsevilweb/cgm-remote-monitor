@@ -21,6 +21,11 @@ Then open **http://127.0.0.1:8099/**
 There is no build step and nothing to install. `npm install` is only needed for
 the automated tests.
 
+Three control schemes. Touch is auto-detected; the **CONTROLS** button in the
+bottom-right cycles them, or use `?controls=keyboard|mouse|touch`.
+
+### Keyboard + mouse (default on desktop)
+
 | Key | Action |
 |-----|--------|
 | **WASD** | Move |
@@ -30,6 +35,31 @@ the automated tests.
 | **SPACE** | Combat dash (0.22 s of i-frames) |
 | **R** | Vent the barrel |
 | **F** | Operator light |
+
+### Mouse only
+
+| Input | Action |
+|-------|--------|
+| **Left click** | Move there. Hold and drag to keep steering. |
+| **Cursor** | The operator always turns to face it |
+| **Right click** | Fire (hold) |
+| **Middle click** | Underslung frag |
+| **Double left click** | Combat dash |
+
+### Touch
+
+| Gesture | Action |
+|---------|--------|
+| **Tap** | Move there |
+| **Press and hold** | Plant, turn to face the held bearing, and fire — but *only* while something is actually on that bearing and in line of sight |
+| **Two fingers** | Frag |
+| **Double tap** | Dash |
+
+The hold does not fire blindly. A finger cannot aim like a mouse, and the
+alternative to that assist is not "harder" — it is the player emptying the barrel
+into a wall and overheating, which teaches nothing and reads as the game being
+broken. It will shoot enemies, queens and egg clutches; it will not shoot through
+walls.
 
 The objective is on the top left, and the violet pips under it are the **brood
 queens** remaining. A queen is the source of the pressure: find the violet light,

@@ -191,6 +191,23 @@ export class Hud {
       }
     }
 
+    // ------------------------------------------------------ move destination
+    // A ring that shrinks as the operator closes on it. It is drawn under
+    // everything else in the hierarchy (§16) because it is a traversal cue, not
+    // a threat — it must never compete with something trying to kill you.
+    if (state.moveGoal) {
+      const g = state.moveGoal;
+      const pulse = 0.55 + 0.45 * Math.sin(state.time * 6);
+      c.save();
+      c.globalAlpha = 0.42 * pulse;
+      c.strokeStyle = '#5fd8ff';
+      c.lineWidth = 2;
+      c.beginPath(); c.arc(g.x, g.y, 13, 0, Math.PI * 2); c.stroke();
+      c.globalAlpha = 0.75 * pulse;
+      c.beginPath(); c.arc(g.x, g.y, 3.5, 0, Math.PI * 2); c.fill();
+      c.restore();
+    }
+
     // ------------------------------------------------ queen compass (the tell)
     if (state.queenDir) {
       const cx = w / 2, cy = h / 2;
