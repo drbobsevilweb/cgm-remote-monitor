@@ -223,14 +223,120 @@ than a gate quietly relaxed until it passes.
 | Gate | State | Detail |
 |------|-------|--------|
 | **P7 shader compilations after prewarm** | **FAILING — 15** | `prewarm()` renders one off-screen frame containing every archetype, both queen types, an egg (shell and core) and the VFX batches, but three.js still compiles ~15 programs during the first seconds of play. The likely remainder is shadow-pass program variants and material permutations that only appear once a light count changes. The instrument is correct and is doing its job; the prewarm is incomplete. Fix is to render the prewarm frame under the worst-case light count with the shadow pass enabled, and to re-run `renderer.compile` after the first light-pool allocation. |
-| E2 determinism (same seed → identical end state) | **UNVERIFIED** | The end-state hash is computed and emitted (`endStateHash`), and the RNG's own determinism is proven in `validate-validators.mjs`, but a same-seed A/B replay pair has not been run end to end. Two ~4-minute headless runs are required. |
-| E3 multi-seed (1337 / 4242 / 777) | **UNVERIFIED** | Only seed 1337 has been run to completion. |
+| E2 determinism (same seed → identical end state) | **PASS** | Two runs of seed 1337, deliberately overlapped on a 4-core box so the pair ran under different machine load, produced identical beat times to the frame, identical stats and the same `endStateHash` (1280891829). Determinism is therefore robust to wall-clock variation, not merely reproducible on a quiet machine. Automated as `npm run matrix`. |
+| E3 multi-seed (1337 / 4242 / 777) | **FAILING — 2 of 3 seeds** | 1337 and 4242 now complete 15/15 (168 s / 260 s). **777 dies at 114 s in the Processing hall** with three queens still alive. See §6e — this is a level-balance finding, not a harness one, and it needs a design decision rather than another tuning pass. |
+| X6 relief ratio | **PASS — for the first time honestly** | 0.000 (12→0), 0.067 (15→1), 0.000 (12→0) across the three seeds, on samples of 12–15. It had been failing on every seed and reporting a pass off a population of four. Full account in §6d. |
 | Visual gates on the full state set | **PARTIAL** | The reason this entry existed at all turned out to be the capture-tool timeout bug above, not the workload. With that fixed, `QUEEN`, `CLUTCH`, `FIRST_COMBAT`, `GRATING` and `SWARM` capture; `DARK_CORRIDOR`, `EXPLOSION`, `ELITE` and `BOSS_REVEAL` have not been re-run since. Measuring the captured set against `validate.mjs` is the next gauntlet round, not a completed one. |
 | Overhead grating, shafts, beacons | **BUILT, TONALLY PARTIAL** | Catwalks, their projected shadows, the light shafts and the rotating warning beacons are all in and reading. Two real bugs were caught by looking at the capture: the shadow stripes ran *along* north-south catwalks instead of across them (world-derived UVs cannot express a projection's orientation — see `addFloorQuadUV`), and the bars were dark enough to read as a painted ladder rather than as light. Both fixed. What is **not** met is the tonal target: the bays are still closer to evenly-lit mid-grey than to the pools-and-blackness of the reference. Ambient levels were roughly halved, IBL fill cut from 0.45 to 0.20 and fixture failure raised to a third, which moved it a long way and not far enough. The remaining offender is lamp *spacing* — at ~1.4× mounting height every pool overlaps its neighbours by design (that spacing was itself the fix for an earlier "poor lamp uniformity" round), so the wash is structural and undoing it means re-deriving the spacing rule against the new ambient. That is a gauntlet round, not a tweak. |
 | Queen silhouette and read | **IMPROVED, NOT FINISHED** | Two rounds of the gauntlet were run against the `CLUTCH` capture. Round 1 found her built at over four metres across and lit to blowout by her own violet emitter sitting *inside* her body — she read as scenery, not an animal. Round 2 rescaled her to roughly car-sized, moved the emitter under her, dropped her emissive from 0.55 to 0.22, and pulled the egg cores back inside the AgX shoulder so they stay violet instead of desaturating to white-pink. She now reads as the largest thing in the room and is obviously worth walking toward. What is still not right: at the 62° camera the abdomen dominates and the hood — which is the entire tell for her frontal armour — is hard to pick out from above. That is the next round, and it is a modelling problem, not a lighting one. |
 | F7–F11 combat invariants | **VERIFIED BY PROBE, NOT GATED** | Queen frontal reduction (34% of a flank round), explosive immunity to the hood, cold-to-forced-vent round count, and clutch-dies-with-queen were each measured directly against the running game. They are not yet wired into an automated gate, so they are checks that were performed rather than checks that are enforced. |
 | Boss / THE DEEP FORM | **NOT BUILT** | The Reactor Antechamber exists, is reachable and is the exit; the large final organism described in DIRECTION is not implemented. The slice currently ends on the fourth queen plus the reactor arena. |
 | Four-player co-op | **NOT STARTED** | Planned and costed in MULTIPLAYER.md. Nothing in the shipped code is netcode, and the singleton `player` reference appears 64 times outside `src/player/`. The blocking piece is enemy target selection for a squad, not the transport. |
+
+## 6d. WHAT E3 CAUGHT THE FIRST TIME IT WAS RUN
+
+Recorded in full because the argument for running a gate you expect to pass is
+exactly this.
+
+**Seed 4242 — `fight_swarm` missed, peak population 13 against a threshold of
+14.** Not a near miss to be waved through: the cause was that the operator shot
+**31 eggs** on that seed, the most of the three, and the peak population is
+inversely related to it. Egg-culling was suppressing the swarm the beat exists to
+test. That is the mechanic working — and working so well it could remove the
+fight, which is not what DIRECTION §2 asks for, because pressure is priority one
+and agency is priority two.
+
+The fix is not a lower threshold. Relaxing a gate until it passes is how a test
+suite becomes decoration. The fix is that **the counter-play has a counter**: a
+queen who loses four eggs inside about fourteen seconds convulses and lays a
+fresh clutch on a cooldown. Culling a clutch still helps *right now*, which is
+the point of the mechanic; it no longer makes the encounter disappear. The player
+is told about it by a queen convulsing in front of them.
+
+**Seed 777 — relief ratio 0.80 against a gate of ≤ 0.40.** X6 is the measurement
+of the single most important beat in the game, and this was a genuine failure:
+the player killed the source of the pressure and 8 of 10 enemies carried on
+unaffected.
+
+The cause was that director vent waves spawned **unowned** (`broodId = -1`) and
+therefore could never panic. A third of the room was structurally exempt from
+relief. Vent waves are now attributed to the nearest living queen — which is also
+the better fiction, since something called them through that vent.
+
+**Seed 777 died at 75 s, and 1337's relief ratio — measured honestly for the
+first time — was 0.54.** With the sample-size guard in place the number stopped
+flattering: X6, the measurement of the single most important beat in the game,
+had been **failing on every seed all along**, hidden behind a population of four.
+
+Three wrong guesses were made before the right one, and it is worth recording
+which, because each was corrected by measurement rather than by argument:
+
+1. *"Orphans can't withdraw because the panic timer gates it."* Changed it. The
+   run came back **byte-identical**. Wrong.
+2. *"They can't withdraw because line of sight never breaks."* Added an
+   LOS-break condition. Byte-identical again — direct instrumentation showed
+   `noLOS=0` in every sample, because in an open cargo hall sight never breaks.
+   Wrong.
+3. Instrumenting the mechanism directly — kill a queen with twenty of her
+   children alive and count every frame — gave the answer in one run: **nothing
+   withdrew for two seconds, then ten withdrew in the third.** The latency was
+   the 17 m run, and nothing else.
+
+And 17 m turned out to be a symptom. It was chosen to push the moment off
+screen, because a creature blinking out in front of the player reads as a bug —
+and the honest reason it read as a bug is that **`enemyWithdrew` had no
+listener**. It vanished silently. Withdrawal is now an act: smoke, fluid, and a
+wet drop through the deck. Once the player can see it happen, it no longer has
+to be hidden, and 11 m is plenty.
+
+Measured on the same instrument afterwards: withdrawals begin at 1 s, sixteen of
+twenty are gone by 2 s, and the +3 s reading is **0.15**. The player watches the
+room empty instead of finding it emptied.
+
+**And the instrument itself was weak.** Both *passing* seeds computed the ratio
+from a population of four. At n=4 the achievable values are 0, 0.25, 0.5, 0.75
+and 1, the 0.40 threshold falls in a gap, and one enemy either way decides pass
+or fail. The probe now arms on the first queen death with a population of at
+least six — the smallest sample whose resolution (0.167) is finer than the
+distance from the threshold to the nearest achievable value — and the report
+carries the denominator, because a ratio without its sample size is a rumour.
+
+That last one is the uncomfortable finding: X6 had been *passing on numbers too
+small to mean anything*, on the seed the whole game was tuned against.
+
+## 6e. THE OPEN E3 FAILURE — PROCESSING HALL, SEED 777
+
+Seed 777 kills the first queen on schedule (29.7 s), reaches ten of fifteen
+beats, and then spends **eighty-four seconds** in the Processing hall failing to
+kill the second one. Health drains from 58 to 22 to nothing; it dies at 113.8 s
+with sixteen enemies on it and three queens still alive.
+
+This is not the harness misbehaving. It is playing correctly and losing.
+
+Processing is the only space in the sector with **two queens** (`q_proc_a` at
+53,29 and `q_proc_b` at 76,43). They are 68 m apart so the 32 m wake radius does
+keep them from going live simultaneously — but the room still supplies pressure
+from two sources against a global cap of 26, and on one seed in three that is
+past what a competent run survives.
+
+It also collides with something §6d established: killing one queen relieves only
+*her* brood. In a hall with two live sources, the loop's central promise —
+identify the source, destroy it, feel the room empty — cannot fully land, because
+half the room has a different source. Processing is the one room in the sector
+where the game's core idea is structurally compromised.
+
+Three candidate fixes, none of them a tuning pass, in the order I would try them:
+
+1. **Separate the two broods in space.** Move `q_proc_b` into the adjacent
+   coolant walk. One source per room restores the loop everywhere and is the
+   change most consistent with DIRECTION §2.
+2. **Make the second queen dormant until the first is dead.** Keeps the room's
+   scale and turns it into two encounters instead of one long one.
+3. **Lower the global living cap while two queens are awake.** Cheapest, least
+   interesting, and does nothing about the relief problem.
+
+Recorded rather than fixed: the choice changes what the mid-game *is*, and that
+is an authoring decision.
 
 ## 7. DEFINITION OF DONE (vertical slice)
 

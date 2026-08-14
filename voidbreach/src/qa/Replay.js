@@ -561,6 +561,7 @@ export class Harness {
         forcedVents: g.weapons.forcedVents,
         manualVents: g.weapons.manualVents,
         reliefRatio: g.stats.reliefRatio,
+        reliefSample: g.stats.reliefSample || null,
         health: +g.player.health.toFixed(1),
         distance: +g.player.distanceTravelled.toFixed(1),
         grating: +g.player.gratingDistance.toFixed(1),

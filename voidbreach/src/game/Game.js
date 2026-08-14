@@ -502,6 +502,17 @@ export class Game {
       if (e.elite) { cam.addShake(0.14); light.pulse(e.x, 1, e.z, PAL.violet, 200, 12, 0.5); }
     });
 
+    // Withdrawal is an ACT, not a despawn. This event had no listener at all,
+    // which is why the enemy had to be pushed off screen before it could be
+    // honoured — a creature that simply stops existing in front of the player is
+    // indistinguishable from a bug. It now goes down through the deck, and the
+    // player gets to watch the room empty rather than find it emptied.
+    ev.on('enemyWithdrew', (e) => {
+      vfx.smoke(e.x, 0.35, e.z, 7, 1.5, 0.5, [0.30, 0.26, 0.34]);
+      vfx.fluid(e.x, 0.3, e.z, 0, 0, 3, [0.5, 0.14, 0.55]);
+      audio.impact({ x: e.x, z: e.z, surface: 'flesh' });
+    });
+
     ev.on('enemyWindup', (e) => audio.chorus(e.kind, e.x, e.z, 'windup'));
     ev.on('enemyLunge', (e) => audio.chorus(e.kind, e.x, e.z, 'lunge'));
 
@@ -579,9 +590,21 @@ export class Game {
       cam.addShake(0.33);
       audio.nestRupture(e);
       this.stats.queenDeaths.push(this.clock.simTime);
-      this.stats.enemiesAtQueenDeath.push(this.enemies.aliveNow || 0);
-      if (this.stats.queenDeaths.length === 1) {
-        this._reliefProbe = { t: this.clock.simTime, before: this.enemies.aliveNow || 0 };
+      const aliveNow = this.enemies.aliveNow || 0;
+      this.stats.enemiesAtQueenDeath.push(aliveNow);
+      // Arm the relief probe on the first queen death with enough of a room to
+      // measure, not simply on the first one.
+      //
+      // It used to fire on death #1 unconditionally, and E3 showed what that was
+      // worth: two of three seeds computed the ratio from a population of FOUR,
+      // where the achievable values are 0, 0.25, 0.5, 0.75, 1 and the gate
+      // threshold of 0.40 falls in a gap — one enemy either way decides pass or
+      // fail. A gate that resolves to a coin toss is not measuring the game
+      // (TEST_PLAN §2). Six is the smallest population where the resolution
+      // (0.167) is finer than the distance from the threshold to the nearest
+      // achievable value.
+      if (this.stats.reliefRatio === undefined && !this._reliefProbe && aliveNow >= 6) {
+        this._reliefProbe = { t: this.clock.simTime, before: aliveNow, nth: this.stats.queenDeaths.length };
       }
     });
 
@@ -726,9 +749,12 @@ export class Game {
       this.stats.peakEnemies = this.enemies.aliveNow;
     }
     if (this._reliefProbe && time - this._reliefProbe.t >= 3) {
-      this._reliefProbe.after = this.enemies.aliveNow || 0;
-      this.stats.reliefRatio = this._reliefProbe.before > 0
-        ? this._reliefProbe.after / this._reliefProbe.before : 0;
+      const probe = this._reliefProbe;
+      probe.after = this.enemies.aliveNow || 0;
+      this.stats.reliefRatio = probe.after / probe.before;
+      // Carried so the number is auditable: a ratio without its denominator is
+      // not a measurement, it is a rumour.
+      this.stats.reliefSample = { before: probe.before, after: probe.after, queen: probe.nth };
       this._reliefProbe = null;
     }
 

@@ -104,11 +104,19 @@ npx playwright install chromium
 Then, with the server running in another terminal:
 
 ```bash
-npm run replay      # the 12-beat self-play run (~4 min headless, faster with a real GPU)
+npm run replay      # the 15-beat self-play run (~4 min headless, faster with a real GPU)
 npm run capture     # canonical camera states into captures/current/
 npm run validate    # measure those captures against the visual gates
+npm run matrix      # gates E2 and E3: same seed twice, then 1337 / 4242 / 777
 npm run gauntlet    # all of the above, in the order that makes them mean something
 ```
+
+`npm run matrix` is the one that finds balance bugs. A single seed tells you the
+game works on the path it was tuned against; three seeds tell you whether it was
+balanced or merely fitted. It currently **fails**: 1337 and 4242 complete, 777
+dies in the Processing hall. That is recorded honestly in TEST_PLAN §6e along
+with the three candidate fixes, because choosing between them changes what the
+mid-game is.
 
 `npm run replay` prints a JSON report. The line that matters is
 `"pass": true` and `"beatsPassed": 12`. It drives the game through the ordinary
@@ -125,12 +133,12 @@ that is what a player does before they have learned the bar.
 ### What "passing" currently looks like
 
 ```
-beats            15/15, exit reached at 194 s with 84/140 health
+beats            15/15, exit reached at 168 s with 140/140 health  (seed 1337)
 first threat     11.6 s   (gate: <= 12 s)
 first damage     14.5 s   (gate: 14-40 s)
 peak enemies     18       (gate: >= 10)
 first queen dead 31.5 s   (gate: <= 90 s)
-relief ratio     0.25     (gate: <= 0.40)
+relief ratio     0.00     (gate: <= 0.40, sample 12)
 eggs killed      25       — the second answer, being used
 vents sealed     4        — permanent, player-caused
 forced vents     7        vs 39 manual: the thermal decision is live

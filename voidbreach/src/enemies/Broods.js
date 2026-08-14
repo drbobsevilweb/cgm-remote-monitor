@@ -108,6 +108,8 @@ export class Broods {
       layPhase: 0,           // 0..1 through the current laying cycle
       convulseLeft: 0,       // eggs still owed by a convulsion
       convulsesDone: 0,
+      clutchLost: 0,         // eggs culled recently, decays
+      cullCooldown: 0,
       woken: false,
       hurt: 0,
       spawned: 0,
@@ -303,6 +305,8 @@ export class Broods {
         x: this.eggX[i], y: 0.4, z: this.eggZ[i],
         ripe: 1 - clamp01(this.eggT[i] / Math.max(0.01, this.eggDur[i])),
       });
+      const queen = this.list[this.eggQueen[i]];
+      if (queen && queen.alive) queen.clutchLost++;
       this.freeEgg(i);
     }
   }
@@ -367,6 +371,24 @@ export class Broods {
     for (const q of this.list) {
       q.hurt = Math.max(0, q.hurt - dt * 1.6);
       if (!q.alive) continue;
+
+      // A queen whose clutch is being culled produces harder.
+      //
+      // Gate E3 caught the reason this has to exist: on seed 4242 the operator
+      // shot 31 eggs and never faced a swarm at all — peak population 13 against
+      // a beat that wants 14. Egg-culling is supposed to be a real answer to
+      // pressure, and it is; what it must not be is an answer that removes the
+      // fight. So the counter-play has a counter, and the player is told about
+      // it, loudly, by a queen convulsing in front of them.
+      q.cullCooldown = Math.max(0, q.cullCooldown - dt);
+      q.clutchLost = Math.max(0, q.clutchLost - dt * 0.28);   // ~14 s memory
+      if (q.clutchLost >= 4 && q.cullCooldown <= 0 && q.woken && this.active) {
+        q.clutchLost = 0;
+        q.cullCooldown = 12;
+        q.convulseLeft = Math.max(q.convulseLeft, q.spec.budget.clutch || 4);
+        q.layTimer = 0;
+        this.events.emit('queenConvulsed', { id: q.id, x: q.x, z: q.z, cause: 'culled' });
+      }
 
       const rate = q.spec.budget.rate;
       // The lay cycle is visible on her body: the sac fills, then empties. The

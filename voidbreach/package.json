@@ -12,6 +12,7 @@
     "check": "node tools/check-deps.mjs && node tools/check-determinism.mjs && node tools/check-geometry.mjs && node tools/level-check.mjs",
     "validators": "node tools/validate-validators.mjs",
     "replay": "node tools/replay.mjs 1337 820000",
+    "matrix": "node tools/replay-matrix.mjs",
     "capture": "node tools/capture.mjs",
     "validate": "node tools/validate.mjs"
   },

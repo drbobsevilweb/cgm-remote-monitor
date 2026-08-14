@@ -103,12 +103,24 @@ export class Director {
     if (!vents.length) return 0;
     const vent = this.rng.pick(vents);
     const count = 3 + Math.floor(this.rng.next() * 3);
+    // A wave BELONGS to the nearest living queen.
+    //
+    // These used to spawn unowned, which meant they could never panic when a
+    // queen died — and gate X6 caught the consequence on seed 777: the player
+    // killed the source of the pressure and 8 of 10 enemies carried on as if
+    // nothing had happened, because most of them had no source to lose. Relief
+    // is the payload of the whole game (DIRECTION §2) and a third of the room
+    // was exempt from it.
+    //
+    // It is also the better fiction: something called them through that vent.
+    const owner = this.broods.nearest(vent.sx, vent.sz);
+    const broodId = owner && owner.dist < 55 ? owner.queen.index : -1;
     let spawned = 0;
     for (let i = 0; i < count; i++) {
       const kind = this.rng.bool(0.78) ? KIND.RUNNER : KIND.STALKER;
       const id = this.enemies.spawn(kind,
         vent.sx + this.rng.gauss(0.6), vent.sz + this.rng.gauss(0.6),
-        { alerted: true, emergeTime: 0.3 + i * 0.12 });
+        { alerted: true, emergeTime: 0.3 + i * 0.12, broodId });
       if (id >= 0) spawned++;
     }
     if (spawned) {

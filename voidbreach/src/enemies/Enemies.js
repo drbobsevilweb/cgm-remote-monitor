@@ -45,6 +45,7 @@ export class Enemies {
     this.alerted = new Uint8Array(CAP);
     this.orphaned = new Uint8Array(CAP);
     this.strand = new Float32Array(CAP);
+    this.orphanT = new Float32Array(CAP);   // seconds since its queen died
 
     this.hash = new SpatialHash(0, 0, sector.grid.width, sector.grid.depth, 2.5, CAP);
     this.killCount = 0;
@@ -116,6 +117,7 @@ export class Enemies {
     this.alerted[i] = opts.alerted ? 1 : 0;
     this.orphaned[i] = 0;
     this.strand[i] = 0;
+    this.orphanT[i] = 0;
     this.events.emit('enemySpawned', { id: i, kind: kindId, x, z });
     return i;
   }
@@ -216,7 +218,7 @@ export class Enemies {
       if (a.elite) continue;
       this.state[i] = ST.FLEE;
       this.timer[i] = duration * (0.7 + this.rng.next() * 0.6);
-      if (broodId >= 0) this.orphaned[i] = 1;
+      if (broodId >= 0) { this.orphaned[i] = 1; this.orphanT[i] = 0; }
       n++;
     }
     return n;
@@ -309,9 +311,47 @@ export class Enemies {
           speed = a.speed * 1.05;
           desiredX = -dirX; desiredY = -dirZ;
           if (a.fleeHeal) this.hp[i] = Math.min(this.maxHp[i], this.hp[i] + a.fleeHeal * dt);
-          if (this.orphaned[i] && distToPlayer > 17 && this.timer[i] < 2.0) {
-            // Its node is gone. It withdraws into the structure and does not
-            // come back — this is the drop in pressure the player must feel.
+          // Its queen is gone. It withdraws into the structure and does not come
+          // back — this is the drop in pressure the player must feel.
+          //
+          // The condition used to be "17 m away AND panic timer under 2 s", and
+          // gate X6 measures the drop at +3 s. An orphan fleeing at 6 m/s needs
+          // most of three seconds to cover 17 m, and the timer starts between
+          // 2.8 and 5.2 s, so the earliest possible withdrawal was later than the
+          // window the gate samples in. The mechanism worked; it was simply
+          // slower than the thing measuring it, and with an honest sample size
+          // X6 failed on every seed.
+          //
+          // Line of sight is the better test anyway, and it is the one the
+          // fiction was already claiming: something withdraws when it is no
+          // longer in front of you. In a refinery full of containers and pillars
+          // that happens within a second or two of it turning to run, and it
+          // never happens on screen — which raw distance could not promise.
+          //
+          // Eligibility is keyed on how long it has been orphaned, NOT on the
+          // panic timer. It used to be gated on that timer falling below a
+          // threshold, and since the timer starts somewhere between 2.8 and
+          // 5.2 s that added a mandatory zero-to-two second dead zone before
+          // anything could leave — measured directly: not one withdrawal in the
+          // first two seconds, then ten in the third. X6 samples at +3 s and read
+          // 50%; a second later the same fight read 35%. The mechanism was never
+          // broken, it was starting late for a reason that served nothing.
+          //
+          // 0.7 s is kept so the player actually SEES them break and run. That
+          // moment is the relief; enemies blinking out on the frame the queen
+          // dies would be cheaper and would read as a bug.
+          if (this.orphaned[i]) this.orphanT[i] += dt;
+          const brokenContact = distToPlayer > 7 &&
+            !this.grid.lineOfSight(px, pz, this.x[i], this.z[i]);
+          // 11 m, not 17. Seventeen was chosen to put the moment off screen,
+          // because a creature blinking out in front of the player reads as a
+          // bug — but the honest reason it read as a bug is that NOTHING
+          // listened to this event: it vanished silently. It is now a visible,
+          // audible act (GAME wires it to smoke and a wet drop through the
+          // deck), so it can happen where the player can see it, which is where
+          // it belongs. Relief the player watches happen is worth more than
+          // relief that is tidied away out of frame.
+          if (this.orphaned[i] && this.orphanT[i] > 0.7 && (distToPlayer > 11 || brokenContact)) {
             this.events.emit('enemyWithdrew', { id: i, kind: this.kind[i], x: this.x[i], z: this.z[i] });
             this.list.release(i);
             alive--;
