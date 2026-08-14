@@ -10,6 +10,14 @@ You need Node.js installed (any recent version). Then:
 
 Open http://127.0.0.1:8099/ in a browser.
 
+TO PLAY ON A PHONE OR TABLET (needed to test the touch controls):
+
+    node tools/serve.mjs --lan
+
+It prints your machine's network address. Open that on the phone, on the
+same wifi. Plain http is fine. Without --lan the server is loopback-only
+and the phone will just time out.
+
 There is no build step and no npm install required to play. three.js is
 vendored in vendor/. Any static web server works -- this one just disables
 caching. (Python alternative:  python3 -m http.server 8099)
@@ -19,13 +27,27 @@ browsers only load over http://.
 
 CONTROLS
 --------
-    WASD    move
-    mouse   aim
-    LMB     carbine  (no ammunition -- it overheats instead)
-    RMB     frag grenade (lobbed at the cursor)
-    SPACE   dash
-    R       vent the barrel
-    F       operator light
+Three schemes. Touch is auto-detected; the CONTROLS button bottom-right
+cycles them, or use ?controls=keyboard|mouse|touch
+
+  KEYBOARD (default on desktop)
+    WASD    move          LMB   carbine (no ammo -- it overheats)
+    mouse   aim           RMB   frag grenade
+    SPACE   dash          R     vent the barrel      F  light
+
+  MOUSE ONLY
+    left click    move there (hold and drag to keep steering)
+    cursor        the operator turns to face it
+    RIGHT click   fire
+    middle click  frag
+    double click  dash
+
+  TOUCH
+    tap             move there
+    press and hold  plant, turn to that bearing, and fire -- but only
+                    while something is actually there and in sight
+    two fingers     frag
+    double tap      dash
 
 THREE THINGS THAT ARE NOT OBVIOUS
 ---------------------------------
@@ -67,6 +89,12 @@ Needs a browser:
     npm run replay        the 15-beat self-play run (~4 min headless)
     npm run gauntlet      everything, in the order that makes it mean something
 
+PLAYTESTING
+-----------
+Read PLAYTEST.md first. It lists what I need to know, what is already
+known to be rough (so you do not report it back), and the four questions
+I cannot answer without a human holding the thing.
+
 READ IT
 -------
     DIRECTION.md      what it should feel and look like, and why
@@ -76,4 +104,5 @@ READ IT
                       and 6c what is still failing
     MULTIPLAYER.md    four-player co-op: planned, costed, not started
     STUDIO.md         the live authoring tool
+    PLAYTEST.md       how to play-test, and what I need to know
     README.md         all of the above, in more detail
