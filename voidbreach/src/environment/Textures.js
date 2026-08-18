@@ -66,6 +66,17 @@ export const TEXTURE_DEFAULTS = {
     rough: 0.58, metal: 0.10, grime: 0.55,
     normalStrength: 0.6,
   },
+  // SILK. Deliberately not violet: violet means "alive and spawning" and
+  // nothing else (DIRECTION §5.5), and silk is neither. It is a near-white
+  // dielectric whose entire job is to take on the colour of whatever light
+  // finds it — amber under a work lamp, red under an alarm.
+  silk: {
+    base: '#d8dee6', rough: 0.24,
+    threads: 34, threadWidth: 0.011, crossThreads: 22,
+    fuzz: 260, fuzzAlpha: 0.13,
+    beads: 90, beadAlpha: 0.5,
+    normalStrength: 0.7,
+  },
 };
 
 function canvas(size = SIZE) {
@@ -432,6 +443,127 @@ function chorusFlesh(rng, p) {
   return g.finish('flesh', { normalStrength: p.normalStrength });
 }
 
+/**
+ * SILK — the only texture in the station with an alpha channel.
+ *
+ * Everything else here paints a surface. This paints a *mask*: the holes are
+ * the point. Silk is drawn as threads on transparent, so a single flat quad
+ * becomes a net, and the net reading comes from the texture rather than from
+ * geometry — which is the only way to afford webbing across a whole sector.
+ *
+ * Because it is alpha-TESTED rather than alpha-blended it still writes depth,
+ * so a dozen overlapping layers of web need no sorting and cost nothing to get
+ * right. The cost of that choice is that the threads have to be bold enough to
+ * survive minification: at 512 px over a 2.5 m tile these are about 1 cm of
+ * rope, which is far thicker than real silk and the only honest way to keep a
+ * web legible twenty metres from the camera.
+ *
+ * Everything is drawn nine times, offset by ±one tile, so every thread that
+ * leaves an edge arrives back on the opposite one and the tile is seamless.
+ */
+function silkWeb(rng, p) {
+  const g = new TexGen(rng);
+  const s = g.size;
+  // Transparent albedo; the other two maps are only ever read where a thread
+  // survives the alpha test, so their background merely has to be sane.
+  g.a.clearRect(0, 0, s, s);
+  g.h.fillStyle = grey(0.5); g.h.fillRect(0, 0, s, s);
+  g.o.fillStyle = rgb(1, p.rough, 0); g.o.fillRect(0, 0, s, s);
+
+  const wrapped = (draw) => {
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        g.a.save(); g.h.save();
+        g.a.translate(ox * s, oy * s); g.h.translate(ox * s, oy * s);
+        draw();
+        g.a.restore(); g.h.restore();
+      }
+    }
+  };
+
+  g.a.lineCap = 'round'; g.h.lineCap = 'round';
+
+  /** One thread: a slack line that wanders, drawn into albedo and height. */
+  const thread = (x0, y0, x1, y1, width, alpha, sagPx) => {
+    const segs = 9;
+    const nx = -(y1 - y0), ny = (x1 - x0);
+    const nl = Math.hypot(nx, ny) || 1;
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      // A parabola, not a straight line. A web under gravity has no straight
+      // edges anywhere, and a straight thread instantly reads as wire.
+      const sag = sagPx * 4 * t * (1 - t);
+      pts.push([
+        x0 + (x1 - x0) * t + (nx / nl) * sag + rng.range(-1.4, 1.4),
+        y0 + (y1 - y0) * t + (ny / nl) * sag + rng.range(-1.4, 1.4),
+      ]);
+    }
+    wrapped(() => {
+      for (const [ctx, style, w] of [
+        [g.a, `rgba(236,242,250,${alpha})`, width],
+        [g.h, grey(0.92), width * 1.35],
+      ]) {
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        ctx.strokeStyle = style; ctx.lineWidth = w; ctx.stroke();
+      }
+    });
+  };
+
+  // Long structural threads, edge to edge, at every angle.
+  const w = g.m(p.threadWidth);
+  for (let i = 0; i < p.threads; i++) {
+    const horizontal = rng.bool();
+    const a = rng.next() * s, b = rng.next() * s;
+    if (horizontal) thread(-s * 0.1, a, s * 1.1, b, w * rng.range(0.7, 1.5), rng.range(0.7, 1), rng.range(-26, 26));
+    else thread(a, -s * 0.1, b, s * 1.1, w * rng.range(0.7, 1.5), rng.range(0.7, 1), rng.range(-26, 26));
+  }
+  // Shorter cross-threads tie the structural ones into a mesh rather than a
+  // pile of parallel lines.
+  for (let i = 0; i < p.crossThreads; i++) {
+    const x = rng.next() * s, y = rng.next() * s;
+    const a = rng.angle(), len = rng.range(s * 0.12, s * 0.42);
+    thread(x, y, x + Math.cos(a) * len, y + Math.sin(a) * len,
+      w * rng.range(0.5, 0.9), rng.range(0.5, 0.85), rng.range(-14, 14));
+  }
+  // Fuzz: the loose broken ends that make silk look abandoned rather than
+  // engineered. Very faint — these mostly die at the alpha test and what
+  // survives is a suggestion of lint.
+  for (let i = 0; i < p.fuzz; i++) {
+    const x = rng.next() * s, y = rng.next() * s;
+    const a = rng.angle(), len = rng.range(4, 22);
+    thread(x, y, x + Math.cos(a) * len, y + Math.sin(a) * len, w * 0.45, p.fuzzAlpha, 0);
+  }
+  // Beads. Real silk carries condensate, and a thread with nodes on it reads
+  // as organic where a clean thread reads as netting. They are also the part
+  // that catches a lamp.
+  for (let i = 0; i < p.beads; i++) {
+    const x = rng.next() * s, y = rng.next() * s, r = rng.range(1.2, 3.4);
+    wrapped(() => {
+      g.a.fillStyle = `rgba(246,250,255,${p.beadAlpha})`;
+      g.a.beginPath(); g.a.arc(x, y, r, 0, Math.PI * 2); g.a.fill();
+      g.h.fillStyle = grey(1.0);
+      g.h.beginPath(); g.h.arc(x, y, r * 0.8, 0, Math.PI * 2); g.h.fill();
+    });
+  }
+
+  // Roughness follows the threads: the beads and thread crowns are the shiny
+  // part, the fuzz is not.
+  const ai = g.a.getImageData(0, 0, s, s).data;
+  const oi = g.o.getImageData(0, 0, s, s), od = oi.data;
+  for (let i = 0; i < od.length; i += 4) {
+    const cover = ai[i + 3] / 255;
+    od[i] = 255;                                        // AO: silk is unoccluded
+    od[i + 1] = Math.round((p.rough + (1 - cover) * 0.45) * 255);
+    od[i + 2] = 0;                                      // never metal
+  }
+  g.o.putImageData(oi, 0, 0);
+
+  return g.finish('silk', { normalStrength: p.normalStrength });
+}
+
 /** HAZARD — 45 degree stripes at 200 mm. Tile is 1 m, not 2.5 m. */
 function hazardStripe(rng, p) {
   const g = new TexGen(rng, 256, 1.0);
@@ -701,6 +833,7 @@ export function buildTextures(rng, params) {
     painted: paintedMetal(r, m('painted')),
     ceramic: ceramicPanel(r, m('ceramic')),
     flesh: chorusFlesh(r, m('flesh')),
+    silk: silkWeb(r, m('silk')),
     hazard: hazardStripe(r, m('hazard')),
     screen: screenFace(r),
     poolPlain: lightPool(r, false),

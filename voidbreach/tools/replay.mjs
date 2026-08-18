@@ -14,8 +14,20 @@ while (Date.now()-t0 < timeoutMs) {
   const r = await p.evaluate(()=>window.__VOIDBREACH_RESULT__ || null);
   if (r) { last=r; break; }
   const prog = await p.evaluate(()=>{ const h=window.__HARNESS; const g=window.__GAME;
-    return h? {t:+h.time.toFixed(0), beats:[...h.beats.values()].filter(x=>x.done).length, kills:g.stats.kills, alive:g.enemies.aliveNow, hp:+g.player.health.toFixed(0), queens:g.broods.remaining, eggs:g.broods.eggsAlive, room:h.roomId()}:null; });
-  if (prog) process.stderr.write(`t=${prog.t}s beats=${prog.beats}/15 kills=${prog.kills} alive=${prog.alive} hp=${prog.hp} queens=${prog.queens} eggs=${prog.eggs} room=${prog.room}\n`);
+    if (!h) return null;
+    // Position, goal and field reachability, because "stalled" on its own has
+    // never once been enough to find out WHY a run stopped moving.
+    let goal = null, fd = -1;
+    try { goal = h.chooseGoal(); fd = h.field.distanceAt(g.player.x, g.player.z); } catch (e) { /* mid-step */ }
+    return {t:+h.time.toFixed(0), beats:[...h.beats.values()].filter(x=>x.done).length,
+      kills:g.stats.kills, alive:g.enemies.aliveNow, hp:+g.player.health.toFixed(0),
+      queens:g.broods.remaining, eggs:g.broods.eggsAlive, room:h.roomId(),
+      at:`${(g.player.x/2.5).toFixed(1)},${(g.player.z/2.5).toFixed(1)}`,
+      goal: goal ? `${goal.kind}@${(goal.x/2.5).toFixed(0)},${(goal.z/2.5).toFixed(0)}` : '?',
+      fd, forced:h.forcedExit?1:0, unreach:h.unreachable.size,
+      doors:g.sector.doors.filter(d=>d.state!=='closed').map(d=>d.id+':'+d.state).join(',')||'-'};
+  });
+  if (prog) process.stderr.write(`t=${prog.t}s beats=${prog.beats}/15 kills=${prog.kills} alive=${prog.alive} hp=${prog.hp} queens=${prog.queens} eggs=${prog.eggs} room=${prog.room} at=${prog.at} goal=${prog.goal} fd=${prog.fd} forced=${prog.forced} unreach=${prog.unreach} doors=${prog.doors}\n`);
   await p.waitForTimeout(6000);
 }
 if (last) console.log(JSON.stringify(last, null, 1));

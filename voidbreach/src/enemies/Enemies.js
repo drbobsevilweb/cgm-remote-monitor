@@ -46,6 +46,12 @@ export class Enemies {
     this.orphaned = new Uint8Array(CAP);
     this.strand = new Float32Array(CAP);
     this.orphanT = new Float32Array(CAP);   // seconds since its queen died
+    // Wall following. `wedged` counts how long this one has wanted to move and
+    // not moved; `wallSide` is which way round the obstruction it committed to
+    // once it noticed, and `wallT` how long that commitment has left to run.
+    this.wedged = new Float32Array(CAP);
+    this.wallSide = new Int8Array(CAP);
+    this.wallT = new Float32Array(CAP);
 
     this.hash = new SpatialHash(0, 0, sector.grid.width, sector.grid.depth, 2.5, CAP);
     this.killCount = 0;
@@ -118,6 +124,7 @@ export class Enemies {
     this.orphaned[i] = 0;
     this.strand[i] = 0;
     this.orphanT[i] = 0;
+    this.wedged[i] = 0; this.wallSide[i] = 0; this.wallT[i] = 0;
     this.events.emit('enemySpawned', { id: i, kind: kindId, x, z });
     return i;
   }
@@ -450,6 +457,30 @@ export class Enemies {
 
       const dl = Math.hypot(desiredX, desiredY);
       if (dl > 1e-4) { desiredX /= dl; desiredY /= dl; }
+
+      // --- WALL FOLLOWING.
+      //
+      // Projecting velocity onto the contact plane (below) makes a creature
+      // slide along a wall it hits at an angle. It does nothing for one pressed
+      // square into a corner, into the flat end of a machine, or into the seam
+      // between two props: the flow field keeps pointing through the obstacle,
+      // the projection cancels the whole vector, and it stands there vibrating
+      // until the player kills it. Sliding is not the same as getting around.
+      //
+      // So when something has wanted to move and hasn't, it commits to a side
+      // and walks along the obstruction instead of into it. Committing matters —
+      // re-deciding every frame is how a creature ends up oscillating in the
+      // mouth of a doorway — and if the commitment does not work it tries the
+      // other way rather than the same way harder.
+      if (this.wallT[i] > 0) {
+        this.wallT[i] -= dt;
+        const s = this.wallSide[i] * 1.15;      // ~66 degrees off the ideal line
+        const cs = Math.cos(s), sn = Math.sin(s);
+        const rx = desiredX * cs - desiredY * sn;
+        const rz = desiredX * sn + desiredY * cs;
+        desiredX = rx; desiredY = rz;
+      }
+
       let tvx = desiredX * speed + sepX * speed * 1.5;
       let tvz = desiredY * speed + sepZ * speed * 1.5;
 
@@ -469,6 +500,32 @@ export class Enemies {
           const into = this.vx[i] * wx + this.vz[i] * wz;
           if (into < 0) { this.vx[i] -= wx * into; this.vz[i] -= wz * into; }
         }
+      }
+
+      // Did it actually get anywhere? A creature that wants to move and has not
+      // moved is wedged, whatever the reason — geometry, a crowd, or both.
+      if (speed > 0.15 && this.state[i] !== ST.WINDUP && this.state[i] !== ST.RECOVER) {
+        if (moved < speed * dt * 0.30) this.wedged[i] += dt;
+        else this.wedged[i] = Math.max(0, this.wedged[i] - dt * 2.5);
+      } else {
+        this.wedged[i] = 0;
+      }
+      if (this.wedged[i] > 0.35 && this.wallT[i] <= 0) {
+        // Pick the way round. The contact normal says which side of the
+        // obstruction we are on; the cross product with the direction we wanted
+        // says which way along it heads forward rather than back.
+        let side;
+        if (this._res.hit) {
+          const cross = this._res.hitX * desiredY - this._res.hitZ * desiredX;
+          side = cross > 0 ? 1 : -1;
+        } else {
+          side = this.seed[i] < 0.5 ? 1 : -1;
+        }
+        // If we already tried a side and are still here, go the other way. The
+        // same choice a second time is the definition of being stuck.
+        this.wallSide[i] = this.wallSide[i] === side ? -side : side;
+        this.wallT[i] = 0.85;
+        this.wedged[i] = 0;
       }
 
       // Face travel direction, except when winding up: then face the player, so

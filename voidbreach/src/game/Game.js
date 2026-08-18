@@ -453,6 +453,9 @@ export class Game {
         life: this.rng.range(7, 12), age: 0, seed: this.rng.next(),
       });
     }
+    // A blast in a room full of silk sets the silk alight, and the silk is what
+    // carries the fire somewhere the blast never reached.
+    this.env.webs.igniteNear(e.x, e.z, e.radius * 1.15, 0.6);
   }
 
   /**
@@ -496,7 +499,15 @@ export class Game {
         e.hp[idx] -= take;
         e.flinch[idx] = Math.max(e.flinch[idx], 0.12);
       }
+
+      // Silk over a burning patch of deck catches, once. After that the fire is
+      // the web's problem and it travels along the strands on its own.
+      if (!f.caughtSilk) {
+        f.caughtSilk = true;
+        this.env.webs.igniteNear(f.x, f.z, f.r + 0.6, 0.0);
+      }
     }
+    this.env.webs.step(dt);
   }
 
   /** Route damage into a wall grille, and put the plate up if that killed it. */
@@ -683,6 +694,28 @@ export class Game {
     });
     ev.on('queenWoke', (e) => this.env.setAlarm(e.x, e.z, 34, true));
     ev.on('queenKilled', (e) => this.env.setAlarm(e.x, e.z, 34, false));
+
+    // Burning silk. WEBS says a piece has caught; GAME decides what that means,
+    // which is: embers, a brief light, and a small fire on the deck under it
+    // using exactly the damage model the deck fires already use. Silk is how
+    // fire gets somewhere a grenade could not — it must not also be a second,
+    // differently-tuned way of hurting things.
+    ev.on('webIgnited', (e) => {
+      vfx.emit(e.x, e.y + 0.2, e.z, 0, 0.8, 0, {
+        life: 0.5, size: 1.6, grow: -1.4, drag: 2.0, grav: -3,
+        color: [4.2, 1.7, 0.5], sprite: 1, additive: true,
+      });
+      light.pulse(e.x, e.y, e.z, 0xff7a2e, 90, 6, 0.30);
+      // Web fires get a smaller share of the budget than blast fires: a room
+      // strung with silk has a lot of elements in it, and letting them fill the
+      // list would starve the fires the player actually caused.
+      if (this.fires.length >= 18) return;
+      if (!this.sector.grid.walkableCell(Math.floor(e.x / CELL), Math.floor(e.z / CELL))) return;
+      this.fires.push({
+        x: e.x, z: e.z, r: Math.min(0.85, 0.4 + e.r * 0.3),
+        life: 3.4, age: 0, seed: this.rng.next(), caughtSilk: true,
+      });
+    });
 
     ev.on('queenConvulsed', (e) => {
       light.pulse(e.x, 1.6, e.z, PAL.violet, 900, 18, 0.4);

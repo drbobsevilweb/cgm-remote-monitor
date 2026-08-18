@@ -70,9 +70,25 @@ export class Director {
       this.events.emit('message', { text: sec.brief, tone: 'log', ttl: 4.5 });
     }
     this.emitObjective();
-    // An 'enter' section is complete the moment you are in it; its job was to
-    // point at the next one.
-    if (sec.clear === 'enter') this.clearSection();
+    // A section whose condition is ALREADY met is complete on arrival.
+    //
+    // 'enter' is the obvious case: its job was only to point at the next one.
+    // The one that cost a whole test matrix is the other: a 'queens' section can
+    // be entered with nothing alive in it, and because clearing was driven
+    // exclusively by the kill event, there was no kill left to fire it. The
+    // chain stopped dead and every door behind that section stayed locked with
+    // the sector already purged. Clearing is a property of the CONDITION, not of
+    // the moment it changed.
+    if (this.conditionMet(sec)) this.clearSection();
+  }
+
+  /** Is this section's clear condition satisfied right now? */
+  conditionMet(sec) {
+    if (!sec) return false;
+    if (sec.clear === 'enter') return true;
+    if (sec.clear === 'queens') return this.sectionQueensLeft(sec) === 0;
+    if (sec.clear === 'exit') return this.sector.exitReached;
+    return false;
   }
 
   /** Which section owns the room the player is standing in? */
@@ -159,7 +175,9 @@ export class Director {
         if (owner && owner !== this.section) this.enterSection(owner.id);
       }
     }
-    if (this.section && this.section.clear === 'exit' && this.sector.exitReached) {
+    // The same rule, every frame, for every kind of section. A condition that is
+    // satisfied clears — whether or not an event happened to announce it.
+    if (this.section && !this.sectionCleared && this.conditionMet(this.section)) {
       this.clearSection();
     }
 

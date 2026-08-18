@@ -159,6 +159,10 @@ export class Broods {
    */
   damageQueen(queen, amount, hx, hy, hz, dirX, dirZ) {
     if (!queen.alive) return 0;
+    // Dormant is invulnerable, on every path — rounds, splash, fire. hitTest
+    // stops anything aiming at her; this stops a frag going off nearby from
+    // killing a phase that has not started yet.
+    if (queen.dormant) return 0;
     let blocked = false;
     if (dirX !== undefined && dirZ !== undefined) {
       // dot < 0 means the round is travelling INTO her face
@@ -218,6 +222,12 @@ export class Broods {
   hitTest(x, z, radius) {
     for (const q of this.list) {
       if (!q.alive) continue;
+      // A dormant queen cannot be shot. She is inert scenery until the level
+      // wakes her, and letting the player kill her early does not skip a fight,
+      // it strands the run: the section she belongs to is then entered with
+      // nothing left to kill, and everything gated behind that section stays
+      // gated. Two-phase rooms only work if phase two cannot be pre-empted.
+      if (q.dormant) continue;
       // Deliberately a little larger than she looks. Tightening these to hug
       // the silhouette was tried and measured: it cost 25% of the radius, the
       // autopilot's time-on-target against every queen went up, and the run died

@@ -6,6 +6,7 @@
 
 import * as THREE from '../../vendor/three.module.js';
 import { MeshBuilder } from './MeshBuilder.js';
+import { Webs } from './Webs.js';
 import { buildTextures } from './Textures.js';
 import { buildProp } from './Props.js';
 import { PAL, TONES, toneOf } from './Palette.js';
@@ -37,6 +38,12 @@ export class Environment {
     this.roomGroups = new Map();
 
     this.build();
+
+    // Silk is authored from the same grid and hangs off the same architecture,
+    // but it is its own engine: its own RNG stream, its own material, its own
+    // simulation. ENVIRONMENT only owns where it lives in the scene graph.
+    this.webs = new Webs(sector, quality, rng, events, this.textures);
+    this.root.add(this.webs.root);
   }
 
   // -------------------------------------------------------------- materials
@@ -1160,6 +1167,9 @@ export class Environment {
   update(dt, time, px, pz) {
     this.time = time;
     this.updateOverhead(px, pz);
+    // Wind and the overhead dissolve only — silk's BURNING runs on the fixed
+    // step from GAME, because it does damage and damage cannot live here.
+    this.webs.present(time, px, 0, pz);
     this.updateBeacons(dt, time);
 
     // Doors slide. Bulkheads part in two, service doors slide aside.
