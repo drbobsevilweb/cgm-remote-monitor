@@ -863,6 +863,7 @@ export class Game {
     }
 
     if (input.interactPressed) this.interact();
+    if (input.mapPressed) this.mapOpen = !this.mapOpen;
   }
 
   enemyNear(x, z, r) {
@@ -975,6 +976,64 @@ export class Game {
         ? this.worldToScreen(this.input.goal.x, 0.05, this.input.goal.z) : null,
       scheme: this.input.scheme,
       assistFiring: !!this.input.assistFiring,
+      map: this.mapOpen ? this.mapState() : null,
+    };
+  }
+
+  /**
+   * The schematic the player sees on M.
+   *
+   * Deliberately not a minimap: it is a station plan with the rooms as boxes,
+   * and it exists to answer one question — where is the objective and how do I
+   * get there. Rooms the player has not entered are drawn as outlines only, so
+   * the plan fills in as they advance and the shape of the level is itself a
+   * record of progress.
+   */
+  mapState() {
+    const p = this.player;
+    const sec = this.director ? this.director.section : null;
+    const secRooms = new Set(sec ? sec.rooms : []);
+    const rooms = this.sector.rooms.map((r) => ({
+      id: r.id, name: r.name, x: r.x, z: r.z, w: r.w, h: r.h,
+      kind: r.kind,
+      seen: !!r.entered,
+      active: secRooms.has(r.id),
+    }));
+    // Live sources, but only in rooms the player has already been in — the map
+    // must not tell them what is waiting in a room they have not opened.
+    const queens = this.broods.list
+      .filter((q) => q.alive && this.sector.roomById.get(q.spec.room)?.entered)
+      .map((q) => ({ x: q.x / CELL, z: q.z / CELL, type: q.type }));
+    const doors = this.sector.doors.map((d) => ({
+      x: d.wx / CELL, z: d.wz / CELL, state: d.state,
+    }));
+    // Where to go next: the nearest live source in the active section, or the
+    // lift once they are all dead.
+    let goal = null;
+    if (sec && sec.clear === 'queens') {
+      let best = null, bd = Infinity;
+      for (const q of this.broods.list) {
+        if (!q.alive || !secRooms.has(q.spec.room)) continue;
+        const d = Math.hypot(q.x - p.x, q.z - p.z);
+        if (d < bd) { bd = d; best = q; }
+      }
+      if (best) goal = { x: best.x / CELL, z: best.z / CELL, label: 'SOURCE' };
+    } else if (sec && sec.clear === 'exit') {
+      const e = this.sector.spec.exit;
+      goal = { x: e.x + e.w / 2, z: e.z + e.h / 2, label: 'LIFT' };
+    } else if (sec && sec.next) {
+      const list = this.sector.spec.sections || [];
+      const nx = list.find((s) => s.id === sec.next);
+      const room = nx && this.sector.roomById.get(nx.rooms[0]);
+      if (room) goal = { x: room.x + room.w / 2, z: room.z + room.h / 2, label: room.name };
+    }
+    return {
+      cols: this.sector.spec.cols, rows: this.sector.spec.rows,
+      rooms, queens, doors, goal,
+      player: { x: p.x / CELL, z: p.z / CELL, aimX: p.aimX, aimZ: p.aimZ },
+      section: sec ? sec.name : '',
+      objective: sec ? sec.objective.replace('{n}',
+        String(this.director.sectionQueensLeft(sec))) : '',
     };
   }
 

@@ -40,6 +40,104 @@ export class Hud {
     });
   }
 
+  /**
+   * The station plan. Rooms as boxes, corridors as thin boxes, the operator as
+   * an arrow, and one marker for the thing to go and do.
+   *
+   * Rooms that have not been entered are outlines only. That means the plan
+   * fills in as the player advances, so its own shape is a record of progress
+   * and the map never spoils a room by telling you what is in it before you
+   * open the door.
+   */
+  drawMap(c, w, h, m, time = 0) {
+    const pad = 54;
+    const availW = w - pad * 2, availH = h - pad * 2 - 40;
+    const s = Math.min(availW / m.cols, availH / m.rows);
+    const ox = (w - m.cols * s) / 2;
+    const oy = (h - m.rows * s) / 2 + 12;
+    const X = (cx) => ox + cx * s;
+    const Z = (cz) => oy + cz * s;
+
+    c.save();
+    c.fillStyle = 'rgba(4,7,11,0.93)';
+    c.fillRect(0, 0, w, h);
+
+    // rooms
+    for (const r of m.rooms) {
+      const rx = X(r.x), rz = Z(r.z), rw = r.w * s, rh = r.h * s;
+      if (r.seen) {
+        c.fillStyle = r.active ? 'rgba(95,216,255,0.20)' : 'rgba(150,170,190,0.10)';
+        c.fillRect(rx, rz, rw, rh);
+      }
+      c.strokeStyle = r.active ? '#5fd8ff'
+        : r.seen ? 'rgba(180,200,220,0.55)' : 'rgba(140,160,180,0.22)';
+      c.lineWidth = r.active ? 2 : 1;
+      c.strokeRect(rx + 0.5, rz + 0.5, rw - 1, rh - 1);
+      if (r.seen && rw > 46 && rh > 22) {
+        c.font = F(9, 600);
+        c.fillStyle = r.active ? 'rgba(95,216,255,0.9)' : 'rgba(200,214,230,0.42)';
+        c.textAlign = 'center';
+        c.fillText(r.name, rx + rw / 2, rz + rh / 2 + 3);
+      }
+    }
+
+    // doors: a sealed one is the reason you cannot go back, so it is drawn
+    for (const d of m.doors) {
+      const dx = X(d.x), dz = Z(d.z);
+      c.fillStyle = d.state === 'sealed' ? '#ff3a2e'
+        : d.state === 'locked' ? '#ffb45a' : 'rgba(200,214,230,0.5)';
+      c.fillRect(dx - 3, dz - 3, 6, 6);
+    }
+
+    // live sources in rooms already visited
+    for (const q of m.queens) {
+      c.fillStyle = '#c23bd8';
+      c.beginPath();
+      c.arc(X(q.x), Z(q.z), q.type === 'matriarch' ? 6 : 4, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // the objective marker, pulsing
+    if (m.goal) {
+      const gx = X(m.goal.x), gz = Z(m.goal.z);
+      const pulse = 0.5 + 0.5 * Math.sin(time * 4);
+      c.save();
+      c.globalAlpha = 0.5 + 0.5 * pulse;
+      c.strokeStyle = '#ffb45a';
+      c.lineWidth = 2;
+      c.beginPath(); c.arc(gx, gz, 9 + pulse * 5, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.moveTo(gx, gz - 14); c.lineTo(gx, gz - 22); c.stroke();
+      c.restore();
+      c.font = F(10, 700);
+      c.fillStyle = '#ffb45a';
+      c.textAlign = 'center';
+      c.fillText(m.goal.label, gx, gz - 26);
+    }
+
+    // the operator
+    const px = X(m.player.x), pz = Z(m.player.z);
+    const a = Math.atan2(m.player.aimZ, m.player.aimX);
+    c.save();
+    c.translate(px, pz); c.rotate(a);
+    c.fillStyle = '#eef4fb';
+    c.beginPath(); c.moveTo(9, 0); c.lineTo(-5, 5); c.lineTo(-5, -5); c.closePath(); c.fill();
+    c.restore();
+
+    // header
+    c.textAlign = 'center';
+    c.font = F(13, 700);
+    c.fillStyle = '#5fd8ff';
+    c.fillText(m.section, w / 2, oy - 22);
+    c.font = F(11, 500);
+    c.fillStyle = 'rgba(200,214,230,0.75)';
+    c.fillText(m.objective, w / 2, oy - 6);
+    c.font = F(10, 500);
+    c.fillStyle = 'rgba(200,214,230,0.35)';
+    c.fillText('M TO CLOSE', w / 2, h - 22);
+    c.textAlign = 'left';
+    c.restore();
+  }
+
   push(text, tone, ttl) {
     this.messages.push({ text, tone, life: ttl, max: ttl });
     if (this.messages.length > 5) this.messages.shift();
@@ -191,6 +289,13 @@ export class Hud {
       }
     }
 
+    // ---------------------------------------------------------------- map
+    // Drawn last of the world overlays and before the messages, because when it
+    // is up it IS the interface — but it is deliberately translucent rather
+    // than opaque, so a threat that arrives while you are reading it is still
+    // visible through it and the game never stops being played.
+    if (state.map) { this.drawMap(c, w, h, state.map, state.time); }
+
     // ------------------------------------------------------ move destination
     // A ring that shrinks as the operator closes on it. It is drawn under
     // everything else in the hierarchy (§16) because it is a traversal cue, not
@@ -238,21 +343,27 @@ export class Hud {
     }
 
     // ------------------------------------------------------------- messages
-    let my = h * 0.30;
-    c.textAlign = 'center';
-    for (const m of this.messages) {
-      const a = Math.min(1, m.life / 0.6) * Math.min(1, (m.max - m.life) / 0.18);
-      c.globalAlpha = a;
-      c.font = F(m.tone === 'objective' ? 19 : 15, m.tone === 'objective' ? 700 : 500);
-      c.fillStyle = TONE_COLOUR[m.tone] || '#cfe0ef';
-      c.fillText(m.text, w / 2, my);
-      my += 26;
-      c.globalAlpha = 1;
+    //
+    // Suppressed while the plan is up. The map is the interface for as long as
+    // it is open, and a station plan with four lines of log text stamped
+    // through the middle of it is not a map.
+    if (!state.map) {
+      let my = h * 0.30;
+      c.textAlign = 'center';
+      for (const m of this.messages) {
+        const a = Math.min(1, m.life / 0.6) * Math.min(1, (m.max - m.life) / 0.18);
+        c.globalAlpha = a;
+        c.font = F(m.tone === 'objective' ? 19 : 15, m.tone === 'objective' ? 700 : 500);
+        c.fillStyle = TONE_COLOUR[m.tone] || '#cfe0ef';
+        c.fillText(m.text, w / 2, my);
+        my += 26;
+        c.globalAlpha = 1;
+      }
     }
     c.textAlign = 'left';
 
     // ------------------------------------------------------------ crosshair
-    this.crosshair(state);
+    if (!state.map) this.crosshair(state);
 
     if (state.mode === 'dead') this.drawEnd(state, 'OPERATOR DOWN', '#ff3a2e');
     if (state.mode === 'won') this.drawEnd(state, 'SECTOR RECLAIMED', '#5fd8ff');

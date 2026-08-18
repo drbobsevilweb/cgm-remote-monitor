@@ -27,6 +27,7 @@ export class InputFrame {
     this.reloadPressed = false;
     this.lightPressed = false;
     this.pausePressed = false;
+    this.mapPressed = false;
   }
   /**
    * Clears the EDGES. It deliberately does not clear `fire` / `secondary`,
@@ -44,6 +45,7 @@ export class InputFrame {
     this.firePressed = false; this.secondaryPressed = false;
     this.dashPressed = false; this.interactPressed = false;
     this.reloadPressed = false; this.lightPressed = false; this.pausePressed = false;
+    this.mapPressed = false;
   }
 }
 
@@ -55,7 +57,7 @@ const KEYMAP = {
   KeyA: 'left', ArrowLeft: 'left',
   KeyD: 'right', ArrowRight: 'right',
   Space: 'dash', KeyE: 'interact', KeyR: 'reload', KeyF: 'light',
-  Escape: 'pause', KeyP: 'pause',
+  Escape: 'pause', KeyP: 'pause', KeyM: 'map', Tab: 'map',
 };
 
 // A tap is short and still. Anything longer, or that travels, is a hold or a drag.
@@ -125,7 +127,7 @@ export class Input {
     const onKey = (e, down) => {
       const action = KEYMAP[e.code];
       if (!action) return;
-      if (e.code === 'Space') e.preventDefault();
+      if (e.code === 'Space' || e.code === 'Tab') e.preventDefault();
       if (down) {
         if (!this.held.has(action)) this.pressedThisFrame.add(action);
         this.held.add(action);
@@ -283,6 +285,7 @@ export class Input {
     f.reloadPressed = f.reloadPressed || this.pressedThisFrame.has('reload');
     f.lightPressed = this.pressedThisFrame.has('light');
     f.pausePressed = this.pressedThisFrame.has('pause');
+    f.mapPressed = this.pressedThisFrame.has('map');
 
     this.mouseDownEdge = false;
     this.rightDownEdge = false;

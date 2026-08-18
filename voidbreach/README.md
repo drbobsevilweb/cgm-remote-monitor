@@ -35,6 +35,7 @@ bottom-right cycles them, or use `?controls=keyboard|mouse|touch`.
 | **SPACE** | Combat dash (0.22 s of i-frames) |
 | **R** | Vent the barrel |
 | **F** | Operator light |
+| **M** | Station plan — where you are, where the objective is |
 
 ### Mouse only
 
