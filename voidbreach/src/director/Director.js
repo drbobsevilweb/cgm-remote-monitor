@@ -20,8 +20,8 @@ export class Director {
     this.intensity = 0;         // 0..1 smoothed pressure estimate
     this.relief = 0;            // seconds of enforced quiet after a queen dies
     this.waveTimer = 14;
-    this.objective = null;
-    this.objectiveIndex = -1;
+    this.section = null;
+    this.sectionCleared = false;
     this.beats = new Set();
     this.bossActive = false;
     this.ventWaveCooldown = 0;
@@ -30,25 +30,93 @@ export class Director {
     broods.active = true;
 
     events.on('queenKilled', (e) => this.onQueenKilled(e));
-    // The objective names her only once she has announced herself.
-    events.on('queenStirred', () => {
-      if (this.objective && this.objective.kind === 'sweep') this.advanceObjective();
-    });
     events.on('beat', (e) => this.beats.add(e.name));
-    this.advanceObjective();
+    this.section = null;
+    this.sectionCleared = false;
+    this.enterSection((sector.spec.sections || [{}])[0].id);
   }
 
-  advanceObjective() {
-    const list = this.sector.spec.objectives;
-    this.objectiveIndex = Math.min(list.length - 1, this.objectiveIndex + 1);
-    this.objective = list[this.objectiveIndex];
+  // ------------------------------------------------------------- sections
+  /**
+   * The level is a chain of sections, and this drives it.
+   *
+   * Every section states its goal the moment the player walks into it, opens
+   * the way on when that goal is met, and welds the way back behind them. The
+   * old model was a flat list of objectives advanced by whatever happened to
+   * happen; the player could be three rooms past an objective that was still
+   * describing where they had been.
+   *
+   * `clear`:
+   *   'enter'   the goal was arriving; cleared on entry
+   *   'queens'  every queen in this section's rooms is dead
+   *   'exit'    reach the lift
+   */
+  enterSection(id) {
+    const list = this.sector.spec.sections || [];
+    const sec = list.find((s) => s.id === id);
+    if (!sec || this.section === sec) return;
+    this.section = sec;
+    this.sectionCleared = false;
+
+    // Weld shut anything that names this section. The player is committed now.
+    for (const d of this.sector.doors) {
+      if (d.sealOn === id) this.sector.sealDoor(d.id);
+    }
+
+    this.events.emit('sectionEnter', {
+      id: sec.id, name: sec.name, brief: sec.brief || '', objective: sec.objective,
+    });
+    if (sec.brief) {
+      this.events.emit('message', { text: sec.brief, tone: 'log', ttl: 4.5 });
+    }
     this.emitObjective();
+    // An 'enter' section is complete the moment you are in it; its job was to
+    // point at the next one.
+    if (sec.clear === 'enter') this.clearSection();
+  }
+
+  /** Which section owns the room the player is standing in? */
+  sectionOfRoom(roomId) {
+    for (const s of this.sector.spec.sections || []) {
+      if (s.rooms.includes(roomId)) return s;
+    }
+    return null;
+  }
+
+  /** Queens belonging to this section's rooms, alive or not. */
+  sectionQueens(sec) {
+    const rooms = new Set(sec.rooms);
+    return this.broods.list.filter((q) => rooms.has(q.spec.room));
+  }
+
+  sectionQueensLeft(sec) {
+    return this.sectionQueens(sec).filter((q) => q.alive).length;
+  }
+
+  clearSection() {
+    const sec = this.section;
+    if (!sec || this.sectionCleared) return;
+    this.sectionCleared = true;
+    for (const id of sec.opens || []) this.sector.unlock(id);
+    // Doors may also name the section rather than be named by it.
+    for (const d of this.sector.doors) {
+      if (d.unlockOn === 'section:' + sec.id) this.sector.unlock(d.id);
+    }
+    this.events.emit('sectionClear', { id: sec.id, name: sec.name, opens: sec.opens || [] });
+    if (sec.clear === 'queens') {
+      this.events.emit('message', { text: sec.name + ' CLEAR', tone: 'good', ttl: 4 });
+    }
   }
 
   emitObjective() {
-    if (!this.objective) return;
-    const text = this.objective.text.replace('{n}', String(this.broods.remaining));
-    this.events.emit('objective', { text, kind: this.objective.kind, id: this.objective.id });
+    const sec = this.section;
+    if (!sec) return;
+    const left = sec.clear === 'queens' ? this.sectionQueensLeft(sec) : 0;
+    const text = sec.objective.replace('{n}', String(left));
+    this.events.emit('objective', {
+      text, kind: sec.clear, id: sec.id, section: sec.name,
+      remaining: left, total: sec.clear === 'queens' ? this.sectionQueens(sec).length : 0,
+    });
   }
 
   onQueenKilled(e) {
@@ -56,10 +124,10 @@ export class Director {
     this.relief = 7.0;
     this.intensity = 0;
     this.waveTimer = Math.max(this.waveTimer, 16);
-    if (this.objective && (this.objective.kind === 'queen' || this.objective.kind === 'queens')) {
-      if (this.broods.remaining === 0 || this.objective.kind === 'queen') this.advanceObjective();
-      else this.emitObjective();
-    }
+    const sec = this.section;
+    if (!sec || sec.clear !== 'queens') return;
+    if (this.sectionQueensLeft(sec) === 0) this.clearSection();
+    else this.emitObjective();     // "{n} REMAINING" counts down as you work
   }
 
   update(dt, player, time) {
@@ -67,10 +135,25 @@ export class Director {
     this.relief = Math.max(0, this.relief - dt);
     this.ventWaveCooldown = Math.max(0, this.ventWaveCooldown - dt);
 
-    // --- objective progress
-    if (this.objective && this.objective.kind === 'reach') {
-      const room = this.sector.roomAtWorld(player.x, player.z);
-      if (room && room.id === this.objective.room) this.advanceObjective();
+    // --- section progress. Walking into a room that belongs to a later section
+    // advances the chain; the doors are what stop this happening out of order.
+    const room = this.sector.roomAtWorld(player.x, player.z);
+    if (room && this.sectionCleared) {
+      // The declared `next` wins over a room lookup, because the last two
+      // sections deliberately share a room: the reactor floor is both the fight
+      // and the extraction, and "purge this" has to become "reach the lift"
+      // without the player walking anywhere to earn it.
+      const list = this.sector.spec.sections || [];
+      const next = this.section && this.section.next
+        ? list.find((s) => s.id === this.section.next) : null;
+      if (next && next.rooms.includes(room.id)) this.enterSection(next.id);
+      else {
+        const owner = this.sectionOfRoom(room.id);
+        if (owner && owner !== this.section) this.enterSection(owner.id);
+      }
+    }
+    if (this.section && this.section.clear === 'exit' && this.sector.exitReached) {
+      this.clearSection();
     }
 
     // --- pressure estimate

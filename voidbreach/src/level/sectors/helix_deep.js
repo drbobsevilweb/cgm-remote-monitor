@@ -1,80 +1,106 @@
 // LEVEL / Sector data — HELIX DEEP, DECK 7: "ARRIVAL AND PROCESSING"
 //
 // Authored, not generated. Every space has a job it did before the Chorus arrived
-// (DIRECTION §3). Coordinates are grid cells (2.5 m). Grid is 88 x 64 = 220 x 160 m.
+// (DIRECTION §3). Coordinates are grid cells (2.5 m). Grid is 50 x 72 = 125 x 180 m.
 //
-// Critical path:
-//   DOCK -> SPINE -> CARGO HALL (node 1) -> HAB SPUR -> HABITATION -> LINK ->
-//   PROCESSING (nodes 2,3, grating catwalks) -> COOLANT WALK (dark) ->
-//   PUMP HOUSE (node 4) -> back east -> [locked bulkhead] -> REACTOR ANTECHAMBER (boss) -> LIFT
+// LINEAR BY CONSTRUCTION. The old map was a ring with loops and alternates, and
+// loops are why a player asks "where am I supposed to go". This one is a chain:
 //
-// Loops and alternates: cargo control + north service trunk (a second way into
-// processing), the mess room, and the processing gantry ring. Loops exist so the
-// player can retreat and so the Chorus can flank.
+//   ARRIVAL -> corridor -> BAY A (1) -> corridor -> BAY B (2) -> corridor ->
+//   [ CELL C (1)  ||  STORES D (0, supplies) ] -> corridor -> REACTOR FLOOR (4 + matriarch) -> LIFT
+//
+// One direction, escalating. The only branch is C-or-D, and both sides rejoin
+// immediately: C is the fight, D is the quiet route with the supplies on it. You
+// can take both, in either order, and you always end up at the same door.
+//
+// Sections seal behind you (see `sections` at the bottom). That is a deliberate
+// loss of freedom: it means the player never has to wonder whether the thing
+// they want is behind them, and it means pressure is always in front.
+//
+// Difficulty is carried by HOW MANY SOURCES ARE LIVE AT ONCE, not by tougher
+// individuals. Bay A is one. Bay B is two. The reactor floor is four and the
+// matriarch. Nothing is crowded on the first level; the escalation is legible
+// because it is countable.
 
 export const HELIX_DEEP = {
   id: 'helix_deep_7',
   name: 'HELIX DEEP // DECK 7',
-  cols: 88,
-  rows: 64,
+  cols: 50,
+  rows: 72,
 
   // --- SPACES ------------------------------------------------------------
   // kind drives geometry, materials, props and lighting in ENVIRONMENT.
+  // Rooms that touch are connected; no explicit carve pass is needed.
   rooms: [
-    { id: 'dock',      name: 'ARRIVAL DECK 7-A',      kind: 'dock',        x: 4,  z: 6,  w: 14, h: 11, ceil: 5.5,  tone: 'amber' },
-    { id: 'spine',     name: 'DOCK SPINE',            kind: 'corridor',    x: 18, z: 10, w: 10, h: 4,  ceil: 3.2,  tone: 'amber' },
-    { id: 'cargo',     name: 'CARGO HALL A',          kind: 'hall',        x: 28, z: 3,  w: 26, h: 21, ceil: 6.5,  tone: 'amber' },
-    { id: 'ctl_link',  name: 'CONTROL ACCESS',        kind: 'corridor',    x: 54, z: 7,  w: 2,  h: 3,  ceil: 3.0,  tone: 'cyan'  },
-    { id: 'cargoctl',  name: 'CARGO CONTROL',         kind: 'office',      x: 56, z: 5,  w: 8,  h: 7,  ceil: 3.2,  tone: 'cyan'  },
-    { id: 'trunk',     name: 'SERVICE TRUNK 7-N',     kind: 'corridor',    x: 58, z: 12, w: 4,  h: 14, ceil: 3.0,  tone: 'dim'   },
-    { id: 'habspur',   name: 'HAB SPUR 7-2',          kind: 'corridor',    x: 37, z: 24, w: 4,  h: 8,  ceil: 3.0,  tone: 'red'   },
-    { id: 'hab',       name: 'HABITATION RING 7-2',   kind: 'habitation',  x: 22, z: 32, w: 22, h: 11, ceil: 3.0,  tone: 'red'   },
-    { id: 'mess',      name: 'MESS 7-2',              kind: 'office',      x: 15, z: 34, w: 7,  h: 6,  ceil: 3.0,  tone: 'amber' },
-    { id: 'link',      name: 'PROCESS ACCESS',        kind: 'corridor',    x: 44, z: 35, w: 6,  h: 4,  ceil: 3.2,  tone: 'dim'   },
-    { id: 'proc',      name: 'ORE PROCESSING',        kind: 'processing',  x: 50, z: 26, w: 28, h: 24, ceil: 8.0,  tone: 'amber' },
-    { id: 'procout',   name: 'SLURRY DOWNCOMER',      kind: 'corridor',    x: 52, z: 50, w: 4,  h: 2,  ceil: 3.2,  tone: 'dim'   },
-    { id: 'coolant',   name: 'COOLANT WALK 7-D',      kind: 'coolant',     x: 20, z: 52, w: 34, h: 5,  ceil: 3.4,  tone: 'dark'  },
-    { id: 'pump',      name: 'PUMP HOUSE 7-D',        kind: 'pump',        x: 8,  z: 47, w: 12, h: 13, ceil: 5.0,  tone: 'dark'  },
-    { id: 'gate',      name: 'PRESSURE LOCK 7-C',     kind: 'corridor',    x: 54, z: 53, w: 4,  h: 3,  ceil: 3.2,  tone: 'red'   },
-    { id: 'reactor',   name: 'REACTOR ANTECHAMBER',   kind: 'reactor',     x: 58, z: 52, w: 24, h: 10, ceil: 7.5,  tone: 'sodium'},
+    // S1 — arrival
+    { id: 'dock',   name: 'ARRIVAL DECK 7-A',    kind: 'dock',       x: 3,  z: 3,  w: 9,  h: 7,  ceil: 5.5, tone: 'amber' },
+    { id: 'c_a',    name: 'DOCK SPINE',          kind: 'corridor',   x: 12, z: 5,  w: 11, h: 3,  ceil: 3.2, tone: 'amber' },
+
+    // S2 — first chamber
+    { id: 'bay_a',  name: 'CARGO BAY A',         kind: 'hall',       x: 23, z: 2,  w: 13, h: 11, ceil: 6.5, tone: 'amber' },
+
+    // S3 — descent
+    { id: 'c_b',    name: 'TRANSFER 7-N',        kind: 'corridor',   x: 28, z: 13, w: 3,  h: 8,  ceil: 3.0, tone: 'dim'   },
+    { id: 'c_c',    name: 'CONVEYOR RUN',        kind: 'corridor',   x: 28, z: 21, w: 13, h: 3,  ceil: 3.2, tone: 'dim'   },
+
+    // S4 — second chamber
+    { id: 'bay_b',  name: 'ORE PROCESSING',      kind: 'processing', x: 33, z: 24, w: 14, h: 14, ceil: 8.0, tone: 'amber' },
+
+    // S5 — the split
+    { id: 'c_d',    name: 'SLURRY DOWNCOMER',    kind: 'corridor',   x: 37, z: 38, w: 3,  h: 6,  ceil: 3.2, tone: 'dim'   },
+    { id: 'c_e',    name: 'COOLANT WALK 7-D',    kind: 'coolant',    x: 22, z: 44, w: 18, h: 3,  ceil: 3.4, tone: 'dark'  },
+    { id: 'c_f',    name: 'STORES ACCESS',       kind: 'corridor',   x: 40, z: 44, w: 3,  h: 3,  ceil: 3.0, tone: 'cyan'  },
+    { id: 'bay_c',  name: 'PUMP CELL 7-D',       kind: 'pump',       x: 18, z: 47, w: 10, h: 9,  ceil: 5.0, tone: 'dark'  },
+    { id: 'bay_d',  name: 'STORES 7-D',          kind: 'office',     x: 36, z: 47, w: 10, h: 9,  ceil: 3.4, tone: 'cyan'  },
+
+    // S6 — converge and finish
+    { id: 'c_g',    name: 'PUMP OUTFALL',        kind: 'corridor',   x: 21, z: 56, w: 3,  h: 5,  ceil: 3.0, tone: 'dark'  },
+    { id: 'c_h',    name: 'STORES OUTFALL',      kind: 'corridor',   x: 39, z: 56, w: 3,  h: 5,  ceil: 3.0, tone: 'dim'   },
+    { id: 'bay_e',  name: 'REACTOR FLOOR 7-C',   kind: 'reactor',    x: 14, z: 61, w: 32, h: 8,  ceil: 7.5, tone: 'sodium'},
   ],
 
   // --- STRUCTURAL FEATURES ----------------------------------------------
   // Open voids with real grating over them (DIRECTION §6). `pit` is the hole,
   // `grate` are the catwalks that cross it.
   pits: [
-    { room: 'proc', x: 56, z: 31, w: 16, h: 14, depth: 4.2 },
-    { room: 'pump', x: 10, z: 50, w: 8,  h: 7,  depth: 3.4 },
+    { room: 'bay_b', x: 37, z: 27, w: 8, h: 9, depth: 4.2 },
+    { room: 'bay_c', x: 20, z: 49, w: 6, h: 5, depth: 3.4 },
+    { room: 'bay_e', x: 20, z: 63, w: 8, h: 4, depth: 3.8 },
   ],
   grates: [
-    // Processing: a cross of catwalks over the ore void — the signature space.
-    { x: 56, z: 36, w: 16, h: 3 },
-    { x: 62, z: 31, w: 3,  h: 14 },
-    // Pump house: a single walk over the coolant sump.
-    { x: 10, z: 52, w: 8,  h: 3 },
-    // Coolant walk runs entirely on grating.
-    { x: 20, z: 53, w: 34, h: 3 },
+    // Processing: catwalks over the ore void — the signature space.
+    { x: 37, z: 30, w: 8,  h: 3 },
+    { x: 40, z: 27, w: 3,  h: 9 },
+    // Coolant walk runs entirely on grating; it is also the dark stretch.
+    { x: 22, z: 44, w: 18, h: 3 },
+    // Pump cell sump.
+    { x: 20, z: 50, w: 6,  h: 3 },
+    // Reactor floor drainage.
+    { x: 20, z: 64, w: 8,  h: 3 },
   ],
 
   // --- DOORS -------------------------------------------------------------
   // kind: 'bulkhead' (two-leaf, pressure), 'service' (single slide)
+  //
+  // `sealOn` welds the door permanently shut when that section becomes active.
+  // That is what makes the level linear rather than merely linear-shaped.
   doors: [
-    { id: 'd_spine',  kind: 'service',  x: 27, z: 10, w: 1, h: 4, axis: 'x', room: 'spine' },
-    { id: 'd_ctl',    kind: 'service',  x: 55, z: 7,  w: 1, h: 3, axis: 'x', room: 'cargoctl' },
-    // The trunk is the alternate way south. Locked with the hab bulkhead so the
-    // first node cannot be skipped; afterwards the player has a real choice of
-    // route into Processing (habitation: supplies and space / trunk: fast and blind).
-    { id: 'd_trunk',  kind: 'service',  x: 58, z: 12, w: 4, h: 1, axis: 'z', room: 'trunk',
-      locked: true, unlockOn: 'queen:q_cargo', label: 'SERVICE TRUNK 7-N' },
-    // B1: opens when the cargo node dies — this is the "next route" of the 60 s contract.
-    { id: 'd_hab',    kind: 'bulkhead', x: 37, z: 24, w: 4, h: 1, axis: 'z', room: 'habspur',
-      locked: true, unlockOn: 'queen:q_cargo', label: 'BULKHEAD 7-2' },
-    { id: 'd_mess',   kind: 'service',  x: 22, z: 35, w: 1, h: 3, axis: 'x', room: 'mess' },
-    { id: 'd_link',   kind: 'bulkhead', x: 49, z: 35, w: 1, h: 4, axis: 'x', room: 'link', label: 'PROCESS ACCESS' },
-    { id: 'd_out',    kind: 'service',  x: 52, z: 50, w: 4, h: 1, axis: 'z', room: 'procout' },
-    // B2: the objective lock. Needs the sector purged.
-    { id: 'd_gate',   kind: 'bulkhead', x: 57, z: 53, w: 1, h: 3, axis: 'x', room: 'gate',
-      locked: true, unlockOn: 'allQueens', label: 'PRESSURE LOCK 7-C' },
+    { id: 'd_a',  kind: 'service',  x: 22, z: 5,  w: 1, h: 3, axis: 'x', room: 'c_a',
+      sealOn: 's3', label: 'DOCK SPINE' },
+    { id: 'd_b',  kind: 'service',  x: 28, z: 12, w: 3, h: 1, axis: 'z', room: 'bay_a',
+      locked: true, unlockOn: 'section:s2', label: 'TRANSFER 7-N' },
+    { id: 'd_c',  kind: 'bulkhead', x: 36, z: 23, w: 3, h: 1, axis: 'z', room: 'c_c',
+      sealOn: 's5', label: 'PROCESSING' },
+    { id: 'd_d',  kind: 'service',  x: 37, z: 37, w: 3, h: 1, axis: 'z', room: 'bay_b',
+      locked: true, unlockOn: 'section:s4', label: 'DOWNCOMER' },
+    { id: 'd_e',  kind: 'service',  x: 21, z: 46, w: 3, h: 1, axis: 'z', room: 'c_e',
+      label: 'PUMP CELL 7-D' },
+    { id: 'd_f',  kind: 'service',  x: 40, z: 46, w: 3, h: 1, axis: 'z', room: 'c_f',
+      label: 'STORES 7-D' },
+    { id: 'd_g',  kind: 'bulkhead', x: 21, z: 55, w: 3, h: 1, axis: 'z', room: 'bay_c',
+      locked: true, unlockOn: 'section:s5', label: 'PRESSURE LOCK 7-C' },
+    { id: 'd_h',  kind: 'bulkhead', x: 39, z: 55, w: 3, h: 1, axis: 'z', room: 'bay_d',
+      locked: true, unlockOn: 'section:s5', label: 'PRESSURE LOCK 7-C' },
   ],
 
   // --- INFESTATION -------------------------------------------------------
@@ -84,189 +110,172 @@ export const HELIX_DEEP = {
   //   incubate seconds an egg takes to come to term
   //   eggs     unhatched eggs she will keep on the deck at once
   //   max      living children she will keep in the world
-  //   clutch   eggs owed by a convulsion (on waking, and at 2/3 and 1/3 health)
+  //   clutch   eggs owed by a convulsion (at 2/3 and 1/3 health)
+  //   wake     eggs owed on waking
   //   mix      what hatches, sampled per egg
   //
   // type: 'matriarch' (larger, hooded, slower cycle) | 'brooder'
+  //
+  // ONE in Bay A. TWO in Bay B. FOUR plus the matriarch on the reactor floor.
+  // Per-queen budgets shrink as the count rises, so four sources is a busier
+  // room rather than four times the pressure — the escalation the player should
+  // feel is "there are more of them", not "each one got harder".
   queens: [
-    // Rates are the OLD spawner rates, not faster ones. Incubation delays the
-    // pipeline once; it does not reduce steady-state throughput, and an egg
-    // buffer saturates a room far better than a spawner ever did — the first
-    // tuning pass shortened the cycle to "compensate" and drove peak population
-    // from 15 to 23 and the operator from 80 health to dead.
-    { id: 'q_cargo', type: 'matriarch', x: 40, z: 4, room: 'cargo', hp: 430, face: 'z-',
-      budget: { rate: 0.82, incubate: 2.1, eggs: 7, max: 18, clutch: 6, wake: 8,
+    // S2 — the teaching fight. One source, generous budget, nothing else live.
+    { id: 'q_a1', type: 'brooder', x: 30, z: 5, room: 'bay_a', hp: 340, face: 'z-',
+      budget: { rate: 0.95, incubate: 2.3, eggs: 6, max: 12, clutch: 4, wake: 5,
         mix: ['runner', 'runner', 'runner', 'spitter'] } },
-    { id: 'q_proc_a', type: 'brooder', x: 53, z: 29, room: 'proc', hp: 340, face: 'z-',
-      budget: { rate: 1.25, incubate: 2.4, eggs: 6, max: 14, clutch: 4, wake: 4,
-        mix: ['runner', 'runner', 'stalker', 'bulwark'] } },
-    { id: 'q_proc_b', type: 'matriarch', x: 76, z: 43, room: 'proc', hp: 380, face: 'x+',
-      budget: { rate: 1.15, incubate: 2.4, eggs: 6, max: 14, clutch: 4, wake: 4,
-        mix: ['runner', 'spitter', 'spitter', 'stalker'] } },
-    { id: 'q_pump', type: 'brooder', x: 12, z: 57, room: 'pump', hp: 340, face: 'z+',
-      budget: { rate: 1.15, incubate: 2.2, eggs: 5, max: 10, clutch: 5, wake: 5,
+
+    // S4 — two sources, opposite ends of the ore void. Crossing the catwalk is
+    // the decision: whichever one you leave alive is behind you while you work.
+    { id: 'q_b1', type: 'brooder', x: 35, z: 29, room: 'bay_b', hp: 320, face: 'z-',
+      budget: { rate: 1.15, incubate: 2.4, eggs: 5, max: 9, clutch: 4, wake: 4,
+        mix: ['runner', 'runner', 'stalker'] } },
+    { id: 'q_b2', type: 'brooder', x: 45, z: 33, room: 'bay_b', hp: 320, face: 'x+',
+      budget: { rate: 1.15, incubate: 2.4, eggs: 5, max: 9, clutch: 4, wake: 4,
+        mix: ['runner', 'spitter', 'stalker'] } },
+
+    // S5 — one in the pump cell, in the dark. Stores is deliberately empty.
+    { id: 'q_c1', type: 'brooder', x: 24, z: 52, room: 'bay_c', hp: 340, face: 'z+',
+      budget: { rate: 1.05, incubate: 2.2, eggs: 5, max: 10, clutch: 5, wake: 5,
         mix: ['stalker', 'runner', 'stalker', 'runner'] } },
-    ],
+
+    // S6 — the reactor floor. Four brooders in the corners and the matriarch in
+    // the middle of them. Individually the weakest in the sector; together they
+    // are the level.
+    { id: 'q_e1', type: 'brooder', x: 17, z: 63, room: 'bay_e', hp: 260, face: 'x-',
+      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+        mix: ['runner', 'runner', 'spitter'] } },
+    { id: 'q_e2', type: 'brooder', x: 43, z: 63, room: 'bay_e', hp: 260, face: 'x+',
+      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+        mix: ['runner', 'runner', 'stalker'] } },
+    { id: 'q_e3', type: 'brooder', x: 17, z: 67, room: 'bay_e', hp: 260, face: 'x-',
+      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+        mix: ['runner', 'spitter', 'runner'] } },
+    { id: 'q_e4', type: 'brooder', x: 43, z: 67, room: 'bay_e', hp: 260, face: 'x+',
+      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+        mix: ['runner', 'runner', 'stalker'] } },
+    { id: 'q_e0', type: 'matriarch', x: 29, z: 65, room: 'bay_e', hp: 520, face: 'z+',
+      budget: { rate: 0.9, incubate: 2.2, eggs: 7, max: 14, clutch: 6, wake: 6,
+        mix: ['runner', 'runner', 'stalker', 'bulwark'] } },
+  ],
 
   // Wall vents: Chorus ingress the player cannot use. Placed to enable flanking
   // from outside the firing arc, never directly on top of the player. Each is a
   // grille with its own health — shoot one out and it is welded shut for good.
   vents: [
-    { x: 28, z: 12, room: 'cargo', face: 'x-' },
-    { x: 45, z: 23, room: 'cargo', face: 'z+' },
-    { x: 53, z: 16, room: 'cargo', face: 'x+' },
-    { x: 36, z: 31, room: 'habspur', face: 'x-' },
-    { x: 23, z: 42, room: 'hab', face: 'z+' },
-    { x: 43, z: 33, room: 'hab', face: 'x+' },
-    { x: 51, z: 27, room: 'proc', face: 'x-' },
-    { x: 77, z: 30, room: 'proc', face: 'x+' },
-    { x: 64, z: 49, room: 'proc', face: 'z+' },
-    { x: 33, z: 56, room: 'coolant', face: 'z+' },
-    { x: 44, z: 52, room: 'coolant', face: 'z-' },
-    { x: 9,  z: 48, room: 'pump', face: 'x-' },
-    { x: 19, z: 58, room: 'pump', face: 'x+' },
-    { x: 60, z: 61, room: 'reactor', face: 'z+' },
-    { x: 81, z: 55, room: 'reactor', face: 'x+' },
+    { x: 24, z: 2,  room: 'bay_a', face: 'z-' },
+    { x: 34, z: 9,  room: 'bay_a', face: 'x+' },
+    { x: 43, z: 24, room: 'bay_b', face: 'z-' },
+    { x: 45, z: 30, room: 'bay_b', face: 'x+' },
+    { x: 34, z: 36, room: 'bay_b', face: 'x-' },
+    { x: 23, z: 45, room: 'c_e',   face: 'z-' },
+    { x: 19, z: 48, room: 'bay_c', face: 'x-' },
+    { x: 26, z: 54, room: 'bay_c', face: 'z+' },
+    { x: 15, z: 62, room: 'bay_e', face: 'x-' },
+    { x: 44, z: 62, room: 'bay_e', face: 'x+' },
+    { x: 24, z: 68, room: 'bay_e', face: 'z+' },
+    { x: 36, z: 68, room: 'bay_e', face: 'z+' },
   ],
 
-  // --- AUTHORED PROPS ----------------------------------------------------
-  // Cargo containers are placed as lanes and chokepoints, not scatter. The two
-  // long rows create a firing lane down the middle of the hall and force the
-  // swarm to arrive around the ends — the player's first tactical read.
+  // --- DRESSING ----------------------------------------------------------
   props: [
-    // DOCK — the station explains its job before its catastrophe.
-    { t: 'crate',    x: 6,  z: 8,  rot: 0 }, { t: 'crate', x: 6, z: 9, rot: 0 },
-    { t: 'crate',    x: 7,  z: 8,  rot: 0 },
-    { t: 'pallet',   x: 9,  z: 14 }, { t: 'pallet', x: 12, z: 15 },
-    { t: 'console',  x: 15, z: 7,  rot: 3.14 },
-    { t: 'sign',     x: 17, z: 12, text: 'CARGO HALL A ->' },
-    { t: 'lamp',     x: 8,  z: 7 }, { t: 'lamp', x: 14, z: 13 },
-    { t: 'loader',   x: 11, z: 10, rot: 0.5 },
+    // dock: you arrived here, and it is the only place that still looks used
+    { t: 'container', x: 4,  z: 4, len: 3 }, { t: 'crate', x: 8, z: 8 },
+    { t: 'locker',    x: 10, z: 4 }, { t: 'console', x: 5, z: 8 },
+    { t: 'medkit',    x: 9,  z: 6 },
 
-    // SPINE — one shootable lamp, deliberately, as the first "consequence".
-    { t: 'lamp',     x: 21, z: 11 }, { t: 'lamp', x: 25, z: 12 },
-    { t: 'tray',     x: 18, z: 10, w: 10 },
+    // c_a
+    { t: 'crate', x: 14, z: 6 }, { t: 'barricade', x: 19, z: 5 },
 
-    // CARGO HALL — container lanes.
-    { t: 'container', x: 32, z: 8,  rot: 0, len: 3 },
-    { t: 'container', x: 32, z: 12, rot: 0, len: 3 },
-    { t: 'container', x: 32, z: 16, rot: 0, len: 3 },
-    { t: 'container', x: 44, z: 8,  rot: 0, len: 3 },
-    { t: 'container', x: 44, z: 12, rot: 0, len: 3 },
-    { t: 'container', x: 44, z: 17, rot: 0, len: 3 },
-    { t: 'container', x: 38, z: 20, rot: 1.5708, len: 2, stack: 1 },
-    { t: 'crane',     x: 41, z: 10 },
-    { t: 'tank',      x: 36, z: 6 },              // beat 5 candidate
-    { t: 'tank',      x: 49, z: 21 },
-    { t: 'lamp',      x: 31, z: 5 }, { t: 'lamp', x: 41, z: 5 },
-    { t: 'lamp',      x: 51, z: 5 }, { t: 'lamp', x: 31, z: 21 },
-    { t: 'lamp',      x: 41, z: 22 }, { t: 'lamp', x: 51, z: 21 },
-    { t: 'barricade', x: 46, z: 23, rot: 0 },
-    { t: 'arc',      x: 34, z: 21 }, { t: 'medkit', x: 50, z: 8 }, { t: 'coolant', x: 45, z: 6 },
-    { t: 'corpse',    x: 47, z: 19, rot: 2.2 },
-    { t: 'sign',      x: 39, z: 23, text: 'HAB 7-2' },
+    // bay_a — cargo. Containers give cover and break the queen's sightlines.
+    { t: 'container', x: 24, z: 8, len: 4 }, { t: 'container', x: 31, z: 10, len: 3, rot: 1 },
+    { t: 'crane', x: 27, z: 3 }, { t: 'crate', x: 33, z: 4 }, { t: 'crate', x: 25, z: 11 },
+    { t: 'arc', x: 33, z: 7 }, { t: 'coolant', x: 26, z: 4 }, { t: 'medkit', x: 34, z: 11 },
+    { t: 'pylon', x: 30, z: 9 },
 
-    // CARGO CONTROL — the reward for looking sideways.
-    { t: 'console',  x: 58, z: 6, rot: 0 }, { t: 'console', x: 60, z: 6, rot: 0 },
-    { t: 'arc',     x: 62, z: 9 }, { t: 'armour', x: 58, z: 10 },
-    { t: 'lamp',     x: 60, z: 8 }, { t: 'corpse', x: 61, z: 10, rot: 0.4 },
+    // c_b / c_c
+    { t: 'crate', x: 29, z: 16 }, { t: 'pylon', x: 29, z: 19 },
+    { t: 'coolant', x: 33, z: 22 }, { t: 'barricade', x: 38, z: 21 },
 
-    // SERVICE TRUNK — dim, narrow, a stalker route.
-    { t: 'tray',     x: 58, z: 13, w: 1, h: 12 },
-    { t: 'lamp',     x: 60, z: 16 }, { t: 'lamp', x: 59, z: 23 },
+    // bay_b — processing. Mills and silos around the void.
+    { t: 'mill', x: 34, z: 25 }, { t: 'silo', x: 44, z: 25 }, { t: 'mill', x: 34, z: 34 },
+    { t: 'loader', x: 44, z: 35 }, { t: 'pylon', x: 36, z: 31 }, { t: 'pylon', x: 45, z: 31 },
+    { t: 'arc', x: 35, z: 36 }, { t: 'medkit', x: 45, z: 27 }, { t: 'armour', x: 34, z: 30 },
+    { t: 'crate', x: 46, z: 33 },
 
-    // HAB SPUR — the tank on the critical path (replay beat 5).
-    { t: 'tank',     x: 39, z: 29 },
-    { t: 'barricade', x: 37, z: 27, rot: 0 },
-    { t: 'lamp',     x: 38, z: 26 },
-    { t: 'corpse',   x: 38, z: 30, rot: 1.1 },
+    // c_d / c_e — the dark walk
+    { t: 'pylon', x: 38, z: 40 }, { t: 'crate', x: 38, z: 42 },
+    { t: 'coolant', x: 27, z: 45 }, { t: 'flare', x: 32, z: 45 }, { t: 'flare', x: 36, z: 45 },
 
-    // HABITATION — welded barricades, evidence of a failed defence.
-    { t: 'bunk',     x: 24, z: 34, rot: 0 }, { t: 'bunk', x: 24, z: 37, rot: 0 },
-    { t: 'bunk',     x: 24, z: 40, rot: 0 }, { t: 'bunk', x: 41, z: 34, rot: 3.14 },
-    { t: 'bunk',     x: 41, z: 38, rot: 3.14 },
-    { t: 'barricade', x: 31, z: 36, rot: 1.5708 },
-    { t: 'barricade', x: 31, z: 39, rot: 1.5708 },
-    { t: 'locker',   x: 28, z: 33, rot: 0 }, { t: 'locker', x: 35, z: 42, rot: 3.14 },
-    { t: 'medkit',   x: 27, z: 41 }, { t: 'coolant', x: 40, z: 41 }, { t: 'arc', x: 24, z: 33 },
-    { t: 'lamp',     x: 27, z: 35 }, { t: 'lamp', x: 36, z: 35 }, { t: 'lamp', x: 31, z: 41 },
-    { t: 'corpse',   x: 33, z: 37, rot: 2.9 }, { t: 'corpse', x: 30, z: 40, rot: 0.2 },
-    { t: 'tank',     x: 42, z: 40 },
+    // bay_c — pump cell, the dark fight
+    { t: 'pump', x: 19, z: 48 }, { t: 'pump', x: 25, z: 48 },
+    { t: 'medkit', x: 19, z: 54 }, { t: 'arc', x: 26, z: 48 }, { t: 'crate', x: 22, z: 54 },
 
-    // MESS — a small human space, the strongest storytelling room in the sector.
-    { t: 'table',    x: 17, z: 36, rot: 0 }, { t: 'table', x: 19, z: 38, rot: 0.3 },
-    { t: 'lamp',     x: 18, z: 36 }, { t: 'medkit', x: 16, z: 38 },
-    { t: 'corpse',   x: 20, z: 36, rot: 1.9 },
+    // bay_d — STORES. No queen, and it is where the supplies are. This is the
+    // reward for exploring the branch rather than sprinting the critical path.
+    { t: 'locker', x: 37, z: 48 }, { t: 'locker', x: 38, z: 48 }, { t: 'locker', x: 39, z: 48 },
+    { t: 'medkit', x: 37, z: 51 }, { t: 'armour', x: 40, z: 51 }, { t: 'arc', x: 43, z: 51 },
+    { t: 'coolant', x: 44, z: 48 }, { t: 'coolant', x: 37, z: 54 }, { t: 'flare', x: 43, z: 54 },
+    { t: 'table', x: 41, z: 49 }, { t: 'crate', x: 44, z: 54 },
 
-    // PROCESSING — machinery around a void, catwalks across it.
-    { t: 'mill',     x: 52, z: 32, rot: 0 }, { t: 'mill', x: 52, z: 40, rot: 0 },
-    { t: 'mill',     x: 74, z: 32, rot: 3.14 },
-    { t: 'conveyor', x: 55, z: 47, w: 20, rot: 0 },
-    { t: 'conveyor', x: 55, z: 28, w: 18, rot: 0 },
-    { t: 'silo',     x: 68, z: 28 }, { t: 'silo', x: 72, z: 28 },
-    { t: 'tank',     x: 58, z: 47 }, { t: 'tank', x: 70, z: 47 }, { t: 'tank', x: 51, z: 45 },
-    { t: 'lamp',     x: 53, z: 27 }, { t: 'lamp', x: 63, z: 27 }, { t: 'lamp', x: 73, z: 27 },
-    { t: 'lamp',     x: 53, z: 48 }, { t: 'lamp', x: 63, z: 48 }, { t: 'lamp', x: 75, z: 40 },
-    { t: 'lamp',     x: 62, z: 37 },
-    { t: 'coolant',     x: 75, z: 47 }, { t: 'arc', x: 51, z: 30 }, { t: 'armour', x: 76, z: 34 },
-    { t: 'medkit',   x: 62, z: 44 }, { t: 'medkit', x: 53, z: 46 },
-    { t: 'console',  x: 51, z: 34, rot: -1.5708 },
-    { t: 'corpse',   x: 66, z: 46, rot: 0.8 },
-    { t: 'sign',     x: 53, z: 49, text: 'COOLANT 7-D' },
+    // c_g / c_h
+    { t: 'crate', x: 22, z: 58 }, { t: 'crate', x: 40, z: 58 },
 
-    // COOLANT WALK — the dark beat. Only two working lamps in 85 m.
-    { t: 'pipe',     x: 20, z: 52, w: 34 },
-    { t: 'steam',    x: 26, z: 54 }, { t: 'steam', x: 35, z: 53 }, { t: 'steam', x: 46, z: 55 },
-    { t: 'lamp',     x: 24, z: 52, broken: true },
-    { t: 'lamp',     x: 31, z: 52, broken: true },
-    { t: 'lamp',     x: 39, z: 52 },
-    { t: 'lamp',     x: 48, z: 56, broken: true },
-    { t: 'corpse',   x: 37, z: 55, rot: 1.4 },
-    { t: 'coolant',     x: 43, z: 54 }, { t: 'medkit', x: 30, z: 54 }, { t: 'armour', x: 51, z: 55 },
-    { t: 'flare',    x: 22, z: 55 },
-
-    // PUMP HOUSE — dark, tall, a sump below the grating.
-    { t: 'pump',     x: 10, z: 48, rot: 0 }, { t: 'pump', x: 17, z: 48, rot: 0 },
-    { t: 'pump',     x: 17, z: 57, rot: 3.14 },
-    { t: 'lamp',     x: 14, z: 48, broken: true }, { t: 'lamp', x: 11, z: 58 },
-    { t: 'tank',     x: 18, z: 52 },
-    { t: 'medkit',   x: 9,  z: 58 }, { t: 'arc', x: 18, z: 59 }, { t: 'coolant', x: 11, z: 48 }, { t: 'medkit', x: 17, z: 59 },
-    { t: 'console',  x: 13, z: 47, rot: 0 },
-
-    // REACTOR ANTECHAMBER — the arena. Sodium heat, structure to break line of sight.
-    { t: 'pylon',    x: 63, z: 55 }, { t: 'pylon', x: 63, z: 59 },
-    { t: 'pylon',    x: 72, z: 55 }, { t: 'pylon', x: 72, z: 59 },
-    { t: 'tank',     x: 60, z: 53 }, { t: 'tank', x: 77, z: 61 }, { t: 'tank', x: 68, z: 61 },
-    { t: 'lamp',     x: 60, z: 57 }, { t: 'lamp', x: 68, z: 53 }, { t: 'lamp', x: 76, z: 57 },
-    { t: 'arc',     x: 59, z: 61 }, { t: 'coolant', x: 79, z: 53 }, { t: 'medkit', x: 67, z: 57 },
-    { t: 'armour',   x: 74, z: 61 },
-    { t: 'lift',     x: 80, z: 57 },
+    // bay_e — reactor floor
+    { t: 'pylon', x: 16, z: 61 }, { t: 'pylon', x: 44, z: 61 },
+    { t: 'pylon', x: 16, z: 68 }, { t: 'pylon', x: 44, z: 68 },
+    { t: 'silo', x: 30, z: 61 }, { t: 'loader', x: 34, z: 67 },
+    { t: 'medkit', x: 15, z: 65 }, { t: 'medkit', x: 45, z: 65 },
+    { t: 'armour', x: 29, z: 61 }, { t: 'coolant', x: 33, z: 62 }, { t: 'arc', x: 26, z: 68 },
+    { t: 'lift', x: 42, z: 65 },
   ],
 
-  // --- FLOW --------------------------------------------------------------
-  spawn: { x: 6.5, z: 11.5, facing: 0 },        // cells; facing +x, toward the sector
-  exit:  { x: 80, z: 56, w: 2, h: 3 },
+  spawn: { x: 5.5, z: 6.5, facing: 0 },        // cells; facing +x, into the sector
+  exit:  { x: 41, z: 64, w: 3, h: 3 },
 
-  objectives: [
-    { id: 'o_start', text: 'REACH CARGO HALL A', kind: 'reach', room: 'cargo' },
-    // Between arriving and being told what to kill there is now a step where
-    // the player does not know yet. Entering the hall used to print KILL THE
-    // BROOD QUEEN before she had made a sound — the game answering its own
-    // question at the moment it should have been asking it.
-    { id: 'o_sweep', text: 'LOCATE THE SOURCE — CARGO HALL A', kind: 'sweep' },
-    { id: 'o_node1', text: 'KILL THE BROOD QUEEN', kind: 'queen', queen: 'q_cargo' },
-    { id: 'o_purge', text: 'PURGE THE SECTOR — QUEENS REMAINING: {n}', kind: 'queens' },
-    { id: 'o_exit',  text: 'REACH THE REACTOR LIFT', kind: 'reach', room: 'reactor' },
+  // --- PROGRESSION -------------------------------------------------------
+  // The level is a chain of sections. Each one states its goal the moment the
+  // player enters it, and the way out opens when that goal is met.
+  //
+  //   clear: 'enter'   the goal is arriving somewhere; cleared on entry
+  //          'queens'  every queen in these rooms is dead
+  //          'exit'    reach the lift
+  //   opens:           doors unlocked when this section clears
+  //   sealOn (on the door) welds it behind the player when a section starts
+  sections: [
+    { id: 's1', name: 'ARRIVAL DECK', rooms: ['dock', 'c_a'],
+      objective: 'MOVE INTO CARGO BAY A', clear: 'enter', next: 's2' },
+
+    { id: 's2', name: 'CARGO BAY A', rooms: ['bay_a'],
+      objective: 'KILL THE BROOD NODE', clear: 'queens', opens: ['d_b'], next: 's3',
+      brief: 'ONE SOURCE. FIND IT.' },
+
+    { id: 's3', name: 'TRANSFER', rooms: ['c_b', 'c_c'],
+      objective: 'ADVANCE TO ORE PROCESSING', clear: 'enter', next: 's4' },
+
+    { id: 's4', name: 'ORE PROCESSING', rooms: ['bay_b'],
+      objective: 'KILL BOTH BROOD NODES', clear: 'queens', opens: ['d_d'], next: 's5',
+      brief: 'TWO SOURCES. ONE IS ALWAYS BEHIND YOU.' },
+
+    { id: 's5', name: 'COOLANT LEVEL', rooms: ['c_d', 'c_e', 'c_f', 'bay_c', 'bay_d'],
+      objective: 'CLEAR THE PUMP CELL — STORES 7-D IS OPTIONAL',
+      clear: 'queens', opens: ['d_g', 'd_h'], next: 's6',
+      brief: 'STORES IS QUIET AND STOCKED. THE PUMP CELL IS NOT.' },
+
+    { id: 's6', name: 'REACTOR FLOOR', rooms: ['c_g', 'c_h', 'bay_e'],
+      objective: 'PURGE THE REACTOR FLOOR — {n} REMAINING', clear: 'queens', next: 's7',
+      brief: 'FOUR NODES AND THE MATRIARCH.' },
+
+    { id: 's7', name: 'EXTRACTION', rooms: ['bay_e'],
+      objective: 'REACH THE LIFT', clear: 'exit' },
   ],
 
-  // Ambient one-shot beats keyed to first entry into a space (AUDIO/HUD).
   triggers: [
-    { room: 'spine',   once: true, message: 'CHARTER LOG — 19 DAYS SINCE LAST TRANSMISSION', tone: 'log' },
-    { room: 'cargo',   once: true, beat: 'cargo_enter' },
-    { room: 'hab',     once: true, message: 'THEY WELDED THE DOORS FROM THE INSIDE', tone: 'log' },
-    { room: 'proc',    once: true, beat: 'proc_enter' },
-    { room: 'coolant', once: true, message: 'LIGHTING CIRCUIT 7-D — FAILED', tone: 'warn' },
-    { room: 'pump',    once: true, beat: 'pump_enter' },
-    { room: 'reactor', once: true, beat: 'boss_reveal' },
+    { room: 'c_a',   once: true, message: 'CHARTER LOG — 19 DAYS SINCE LAST TRANSMISSION', tone: 'log' },
+    { room: 'bay_a', once: true, beat: 'cargo_enter' },
+    { room: 'c_e',   once: true, message: 'LIGHTING CIRCUIT 7-D — FAILED', tone: 'warn' },
+    { room: 'bay_d', once: true, message: 'STORES 7-D — SEALED SINCE THE BREACH', tone: 'good' },
+    { room: 'bay_e', once: true, message: 'REACTOR FLOOR — MULTIPLE MASSES', tone: 'bad' },
   ],
 };

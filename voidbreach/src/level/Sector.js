@@ -237,9 +237,30 @@ export class Sector {
     this.events.emit('doorState', { id: d.id, state: 'unlocked', x: d.wx, z: d.wz, label: d.label });
   }
 
+  /**
+   * Weld a door permanently shut behind the player.
+   *
+   * A sealed door is not "closed": it never cycles again, it stays solid for
+   * collision, navigation, projectiles and sight, and both the Chorus and the
+   * player are on whichever side they were on. This is what makes the level a
+   * chain rather than a ring, and it is why the player never has to wonder
+   * whether the thing they need is behind them.
+   */
+  sealDoor(doorId) {
+    const d = this.doorById.get(doorId);
+    if (!d || d.state === 'sealed') return null;
+    d.state = 'sealed';
+    d.open01 = 0;
+    this.grid.doorOpen[d.index] = 0;
+    this.grid.doorLocked[d.index] = 1;
+    this.nav.invalidate();
+    this.events.emit('doorState', { id: d.id, state: 'sealed', x: d.wx, z: d.wz, label: d.label });
+    return d;
+  }
+
   onQueenKilled(queenId, remaining) {
     for (const d of this.doors) {
-      if (d.state !== 'locked') continue;
+      if (d.state !== 'locked') continue;   // sealed doors never unlock
       if (d.unlockOn === `queen:${queenId}` || (d.unlockOn === 'allQueens' && remaining === 0)) {
         this.unlock(d.id);
       }
@@ -280,7 +301,7 @@ export class Sector {
       const r = d.kind === 'bulkhead' ? 5.0 : 4.0;
       const near = Math.hypot(px - d.wx, pz - d.wz) < r ||
                    (actorNear ? actorNear(d.wx, d.wz, r * 0.8) : false);
-      const want = near && d.state !== 'locked';
+      const want = near && d.state !== 'locked' && d.state !== 'sealed';
       const prevOpen = d.open01;
       const speed = d.kind === 'bulkhead' ? 0.9 : 1.9;
       d.open01 += (want ? dt * speed : -dt * speed * 0.8);
