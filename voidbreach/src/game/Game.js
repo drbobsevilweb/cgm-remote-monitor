@@ -23,7 +23,7 @@ import { Hud } from '../hud/Hud.js';
 import { Player } from '../player/Player.js';
 import { Weapons } from '../weapons/Weapons.js';
 import { P_SPIT } from '../weapons/Projectiles.js';
-import { Enemies, ARCHETYPES, KIND } from '../enemies/Enemies.js';
+import { Enemies, ARCHETYPES, KIND, ST } from '../enemies/Enemies.js';
 import { Broods } from '../enemies/Broods.js';
 import { Director } from '../director/Director.js';
 import { Profiler } from '../qa/Profiler.js';
@@ -31,6 +31,11 @@ import { PAL, applyPaletteOverrides } from '../environment/Palette.js';
 import { section, overridesActive } from '../core/Overrides.js';
 import { CELL, C } from '../level/Grid.js';
 import { clamp, clamp01 } from '../core/Mathx.js';
+
+// Fire damage. The asymmetry is deliberate and documented in updateFires().
+const FIRE_PLAYER_DPS = 3.5;     // a nuisance; acid, by comparison, is 9
+const FIRE_CHORUS_DPS = 26;      // genuinely damaging
+const FIRE_FLOOR = 0.30;         // never burns anything below 30% of its health
 
 export class Game {
   constructor(opts) {
@@ -207,6 +212,10 @@ export class Game {
     this.vfx.muzzle(this.player.x, 1.2, this.player.z, 1, 0);
     this.vfx.addTracer(this.player.x, 1.2, this.player.z, 1, 0, 4, [1, 1, 1]);
     this.vfx.update(0.016, 0);
+    // A probe fire, so the flame material is compiled here rather than at the
+    // moment a pressure tank goes up in the player's face (gate P7).
+    this.fires.push({ x: this.player.x + 5, z: this.player.z + 5, r: 0.8, life: 1, age: 1, seed: 0.5 });
+    this.vfx.drawFires(this.fires, 0);
     this.vfx.draw(this.renderer.camera);
     for (const q of this.broods.list) q.group.visible = true;
     // Eggs are their own two materials and would otherwise compile the first
@@ -225,6 +234,8 @@ export class Game {
     this.renderer.post.render(this.renderer.scene, this.renderer.camera);
 
     for (const id of probes) this.enemies.list.release(id);
+    this.fires.length = 0;
+    this.vfx.drawFires(this.fires, 0);
     for (const id of probeEggs) this.broods.freeEgg(id);
     this.broods.updateEggs(0.016, 0);
     if (this.env.ventSealMesh && this.sector.vents.length) {
@@ -420,6 +431,74 @@ export class Game {
     }
   }
 
+  /**
+   * Leave a few small fires where something burst.
+   *
+   * Deliberately sparse and deliberately small: two or three patches roughly a
+   * metre across, not a carpet. A fire that fills the room is scenery and the
+   * player learns to ignore it; a fire you have to step around is a hazard, and
+   * a hazard is only interesting if there is floor next to it.
+   */
+  igniteAround(e) {
+    const grid = this.sector.grid;
+    const count = e.kind === 'tank' ? 3 : 2;
+    for (let i = 0; i < count; i++) {
+      const a = this.rng.angle();
+      const d = this.rng.range(0.4, e.radius * 0.55);
+      const x = e.x + Math.cos(a) * d, z = e.z + Math.sin(a) * d;
+      if (!grid.walkableCell(Math.floor(x / CELL), Math.floor(z / CELL))) continue;
+      if (this.fires.length >= 24) break;
+      this.fires.push({
+        x, z, r: this.rng.range(0.55, 0.95),
+        life: this.rng.range(7, 12), age: 0, seed: this.rng.next(),
+      });
+    }
+  }
+
+  /**
+   * Fire burns things. What it does NOT do is kill them.
+   *
+   *   PLAYER    a nuisance. It should make you move, not take the run off you,
+   *             and stepping through a burning doorway must stay an option.
+   *   CHORUS    genuinely damaging — far more than it is to the operator — but
+   *             it will never take one below 30% of its health. Fire injures up
+   *             to 70%, in proportion to how long something stood in it, and
+   *             the last third has to be earned with the weapon.
+   *
+   * That asymmetry is the point. Fire is a tool for softening a room, not for
+   * clearing it, so it can be generous without ever becoming the answer.
+   */
+  updateFires(dt) {
+    const e = this.enemies;
+    for (let i = this.fires.length - 1; i >= 0; i--) {
+      const f = this.fires[i];
+      f.age += dt;
+      f.life -= dt;
+      if (f.life <= 0) { this.fires.splice(i, 1); continue; }
+      if (f.age < 0.25) continue;              // it has to catch before it burns
+
+      if (this.player.alive &&
+          Math.hypot(this.player.x - f.x, this.player.z - f.z) < f.r + 0.35) {
+        this.player.damage(FIRE_PLAYER_DPS * dt, 0, 0);
+      }
+
+      e.hash.query(f.x, f.z, f.r + 0.8);
+      const n = e.hash.resultCount;
+      const res = e.hash.result;
+      for (let k = 0; k < n; k++) {
+        const idx = res[k];
+        if (e.state[idx] === ST.DYING) continue;
+        if (Math.hypot(e.x[idx] - f.x, e.z[idx] - f.z) > f.r + 0.45) continue;
+        const floor = e.maxHp[idx] * FIRE_FLOOR;
+        if (e.hp[idx] <= floor) continue;      // already burned as far as fire goes
+        const take = Math.min(FIRE_CHORUS_DPS * dt, e.hp[idx] - floor);
+        if (take <= 0) continue;
+        e.hp[idx] -= take;
+        e.flinch[idx] = Math.max(e.flinch[idx], 0.12);
+      }
+    }
+  }
+
   /** Route damage into a wall grille, and put the plate up if that killed it. */
   damageVentCell(cx, cz, amount) {
     const v = this.sector.damageVent(cx, cz, amount);
@@ -546,6 +625,7 @@ export class Game {
       audio.explosion(e);
       this.enemies.explode(e.x, e.z, e.radius, e.power);
       this.explodeBrood(e);
+      this.igniteAround(e);
       // chain: tanks detonate each other
       for (let i = 0; i < this.env.tanks.length; i++) {
         const t = this.env.tanks[i];
@@ -685,6 +765,7 @@ export class Game {
     });
 
     this.acidPools = [];
+    this.fires = [];
     this.pendingDetonations = [];
   }
 
@@ -825,6 +906,8 @@ export class Game {
       }
     }
 
+    this.updateFires(dt);
+
     // acid pools damage over time
     for (let i = this.acidPools.length - 1; i >= 0; i--) {
       const p = this.acidPools[i];
@@ -896,6 +979,7 @@ export class Game {
 
     this.env.update(realDelta, time, p.x, p.z);
     this.enemies.draw(this.clock.alpha, time);
+    this.vfx.drawFires(this.fires, time);
     this.vfx.draw(this.renderer.camera);
     this.updatePickups(realDelta, time);
     this.drawTracers();

@@ -237,16 +237,19 @@ export class Vfx {
   }
 
   explosion(x, y, z, radius, power) {
-    for (let i = 0; i < 26; i++) {
+    // Fewer, shorter, smaller. The blast is the event; the burning that follows
+    // is a separate, quieter thing with its own geometry (see drawFires), and
+    // the old version tried to be both at once by throwing thirty sprites.
+    for (let i = 0; i < 14; i++) {
       const a = this.rng.angle();
-      const spd = this.rng.range(4, 20);
-      this.emit(x, y, z, Math.cos(a) * spd, this.rng.range(1, 9), Math.sin(a) * spd, {
-        life: this.rng.range(0.18, 0.45), size: this.rng.range(2, 6), grow: -3,
-        drag: 3.4, grav: -8, color: [8, 4.4, 1.4], sprite: 1, additive: true,
+      const spd = this.rng.range(3, 13);
+      this.emit(x, y, z, Math.cos(a) * spd, this.rng.range(1, 6), Math.sin(a) * spd, {
+        life: this.rng.range(0.14, 0.30), size: this.rng.range(1.5, 3.6), grow: -3,
+        drag: 4.0, grav: -8, color: [7, 3.8, 1.2], sprite: 1, additive: true,
       });
     }
     this.emit(x, y + 0.4, z, 0, 0.5, 0, {
-      life: 0.14, size: 26, grow: 40, drag: 8, color: [7, 5, 3], sprite: 0, additive: true,
+      life: 0.11, size: 15, grow: 26, drag: 9, color: [6, 4.2, 2.4], sprite: 0, additive: true,
     });
     this.smoke(x, y + 0.5, z, 16, 7, 1.5);
     this.chips(x, y, z, 0, 0, 12);
@@ -393,6 +396,98 @@ export class Vfx {
     this.screen.heal = Math.max(0, this.screen.heal - dt * 1.6);
     this.screen.flash = Math.max(0, this.screen.flash - dt * 4.5);
     this.screen.shake = Math.max(0, this.screen.shake - dt * 2.2);
+  }
+
+  /**
+   * FLAMES — cones, not billboards.
+   *
+   * Fire was previously nothing but a burst of round additive sprites, which is
+   * why it read as a puff of orange rather than as burning. A flame has a
+   * SHAPE: wide and bright at the base, narrow and unstable at the tip, and the
+   * tip is the part that moves. So each fire is a small stack of tapered cones
+   * whose tips wander on their own phase — the base stays put and the top
+   * licks, which is the motion the eye actually reads as fire.
+   *
+   * Three cones per fire, not thirty. The instruction was "less rampant and
+   * smaller", and a fire that fills a room is scenery; a fire you can step
+   * around is a hazard.
+   */
+  buildFlames() {
+    const CONES = 3;
+    this.flameCap = 24 * CONES;
+    const geom = new THREE.ConeGeometry(0.42, 1.0, 6, 1, true);
+    geom.translate(0, 0.5, 0);          // pivot at the base, so tilt swings the tip
+    // Every other geometry in this project comes from MeshBuilder, which always
+    // writes a vertex colour — so the shared emissive materials are all
+    // `vertexColors: true`. A stock three geometry carries none, which meant
+    // vColor was undefined, the additive result was black, and fifteen flame
+    // instances rendered perfectly and invisibly. Give it white vertices.
+    const vcount = geom.attributes.position.count;
+    geom.setAttribute('color',
+      new THREE.BufferAttribute(new Float32Array(vcount * 3).fill(1), 3));
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, vertexColors: true,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      transparent: true, depthWrite: false, toneMapped: true,
+    });
+    this.flameMesh = new THREE.InstancedMesh(geom, mat, this.flameCap);
+    this.flameMesh.frustumCulled = false;
+    this.flameMesh.count = 0;
+    this.flameMesh.instanceColor = new THREE.InstancedBufferAttribute(
+      new Float32Array(this.flameCap * 3), 3);
+    this.flameMesh.renderOrder = 7;
+    this.scene.add(this.flameMesh);
+    this._flameM4 = new THREE.Matrix4();
+    this._flameQ = new THREE.Quaternion();
+    this._flameE = new THREE.Euler();
+    this._flameV = new THREE.Vector3();
+    this._flameS = new THREE.Vector3();
+    this.flameCones = CONES;
+  }
+
+  /**
+   * Draw the fires GAME owns. VFX renders them; it does not decide who burns.
+   */
+  drawFires(fires, time) {
+    if (!this.flameMesh) this.buildFlames();
+    const m4 = this._flameM4, q = this._flameQ, e = this._flameE;
+    const v = this._flameV, sc = this._flameS;
+    const col = this.flameMesh.instanceColor;
+    let n = 0;
+    for (const f of fires) {
+      const fade = Math.min(1, f.life / 1.2) * Math.min(1, f.age / 0.35);
+      for (let k = 0; k < this.flameCones && n < this.flameCap; k++) {
+        const t = k / this.flameCones;
+        const ph = f.seed * 6.28 + k * 2.1;
+        // The tip wanders; the base does not. Two frequencies so it never
+        // settles into an obvious loop.
+        const tilt = 0.20 * Math.sin(time * (3.1 + k) + ph)
+                   + 0.10 * Math.sin(time * (7.7 - k) + ph * 1.7);
+        const roll = 0.18 * Math.cos(time * (2.6 + k * 0.7) + ph);
+        const flick = 0.78 + 0.22 * Math.sin(time * (9 + k * 3) + ph * 2.3);
+        const r = f.r * (1 - t * 0.45) * fade;
+        const hgt = f.r * (1.5 - t * 0.35) * flick * fade;
+        e.set(tilt, ph, roll);
+        q.setFromEuler(e);
+        v.set(f.x, 0.02 + t * f.r * 0.35, f.z);
+        sc.set(r, hgt, r);
+        m4.compose(v, q, sc);
+        this.flameMesh.setMatrixAt(n, m4);
+        // It has to stay ORANGE. Pushed any brighter it goes through the AgX
+        // shoulder and comes out white, which is the same mistake the egg cores
+        // made: a fire that desaturates to white stops reading as fire and
+        // starts reading as a light bulb. Bright enough to bloom, dark enough
+        // to keep its hue.
+        const heat = (1 - t) * flick * fade;
+        col.setXYZ(n, 1.55 * heat + 0.22, 0.52 * heat + 0.05, 0.09 * heat);
+        n++;
+      }
+    }
+    this.flameMesh.count = n;
+    if (n > 0) {
+      this.flameMesh.instanceMatrix.needsUpdate = true;
+      col.needsUpdate = true;
+    }
   }
 
   /** Write GPU buffers. Called once per rendered frame. */

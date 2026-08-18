@@ -56,7 +56,8 @@ export const HELIX_DEEP = {
     // S6 — converge and finish
     { id: 'c_g',    name: 'PUMP OUTFALL',        kind: 'corridor',   x: 21, z: 56, w: 3,  h: 5,  ceil: 3.0, tone: 'dark'  },
     { id: 'c_h',    name: 'STORES OUTFALL',      kind: 'corridor',   x: 39, z: 56, w: 3,  h: 5,  ceil: 3.0, tone: 'dim'   },
-    { id: 'bay_e',  name: 'REACTOR FLOOR 7-C',   kind: 'reactor',    x: 14, z: 61, w: 32, h: 8,  ceil: 7.5, tone: 'sodium'},
+    { id: 'bay_e',  name: 'REACTOR FLOOR 7-C',   kind: 'reactor',    x: 14, z: 61, w: 29, h: 8,  ceil: 7.5, tone: 'sodium'},
+    { id: 'c_lift', name: 'EXTRACTION LOCK',     kind: 'corridor',   x: 43, z: 63, w: 5,  h: 4,  ceil: 4.0, tone: 'cyan'  },
   ],
 
   // --- STRUCTURAL FEATURES ----------------------------------------------
@@ -101,6 +102,12 @@ export const HELIX_DEEP = {
       locked: true, unlockOn: 'section:s5', label: 'PRESSURE LOCK 7-C' },
     { id: 'd_h',  kind: 'bulkhead', x: 39, z: 55, w: 3, h: 1, axis: 'z', room: 'bay_d',
       locked: true, unlockOn: 'section:s5', label: 'PRESSURE LOCK 7-C' },
+    // The lift does not accept you until the floor is purged. Without this the
+    // exit sits in the open at the far end of the final fight, and walking onto
+    // it ends the run with the matriarch still alive — which is exactly what
+    // three seeds did.
+    { id: 'd_lift', kind: 'bulkhead', x: 43, z: 63, w: 1, h: 4, axis: 'x', room: 'c_lift',
+      locked: true, unlockOn: 'section:s6b', label: 'EXTRACTION LOCK' },
   ],
 
   // --- INFESTATION -------------------------------------------------------
@@ -144,19 +151,21 @@ export const HELIX_DEEP = {
     // the middle of them. Individually the weakest in the sector; together they
     // are the level.
     { id: 'q_e1', type: 'brooder', x: 17, z: 63, room: 'bay_e', hp: 260, face: 'x-',
-      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+      budget: { rate: 2.1, incubate: 2.8, eggs: 2, max: 3, clutch: 2, wake: 2,
         mix: ['runner', 'runner', 'spitter'] } },
-    { id: 'q_e2', type: 'brooder', x: 43, z: 63, room: 'bay_e', hp: 260, face: 'x+',
-      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+    { id: 'q_e2', type: 'brooder', x: 40, z: 63, room: 'bay_e', hp: 260, face: 'x+',
+      budget: { rate: 2.1, incubate: 2.8, eggs: 2, max: 3, clutch: 2, wake: 2,
         mix: ['runner', 'runner', 'stalker'] } },
     { id: 'q_e3', type: 'brooder', x: 17, z: 67, room: 'bay_e', hp: 260, face: 'x-',
-      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+      budget: { rate: 2.1, incubate: 2.8, eggs: 2, max: 3, clutch: 2, wake: 2,
         mix: ['runner', 'spitter', 'runner'] } },
-    { id: 'q_e4', type: 'brooder', x: 43, z: 67, room: 'bay_e', hp: 260, face: 'x+',
-      budget: { rate: 1.5, incubate: 2.6, eggs: 3, max: 5, clutch: 3, wake: 3,
+    { id: 'q_e4', type: 'brooder', x: 40, z: 67, room: 'bay_e', hp: 260, face: 'x+',
+      budget: { rate: 2.1, incubate: 2.8, eggs: 2, max: 3, clutch: 2, wake: 2,
         mix: ['runner', 'runner', 'stalker'] } },
-    { id: 'q_e0', type: 'matriarch', x: 29, z: 65, room: 'bay_e', hp: 520, face: 'z+',
-      budget: { rate: 0.9, incubate: 2.2, eggs: 7, max: 14, clutch: 6, wake: 6,
+    // Dormant until the four are dead. Five live sources at once was measured
+    // and it killed every seed: the reactor floor is two fights, not one.
+    { id: 'q_e0', type: 'matriarch', x: 29, z: 65, room: 'bay_e', hp: 460, face: 'z+', dormant: true,
+      budget: { rate: 1.0, incubate: 2.3, eggs: 6, max: 11, clutch: 5, wake: 5,
         mix: ['runner', 'runner', 'stalker', 'bulwark'] } },
   ],
 
@@ -173,7 +182,7 @@ export const HELIX_DEEP = {
     { x: 19, z: 48, room: 'bay_c', face: 'x-' },
     { x: 26, z: 54, room: 'bay_c', face: 'z+' },
     { x: 15, z: 62, room: 'bay_e', face: 'x-' },
-    { x: 44, z: 62, room: 'bay_e', face: 'x+' },
+    { x: 41, z: 62, room: 'bay_e', face: 'z-' },
     { x: 24, z: 68, room: 'bay_e', face: 'z+' },
     { x: 36, z: 68, room: 'bay_e', face: 'z+' },
   ],
@@ -191,6 +200,7 @@ export const HELIX_DEEP = {
     // bay_a — cargo. Containers give cover and break the queen's sightlines.
     { t: 'container', x: 24, z: 8, len: 4 }, { t: 'container', x: 31, z: 10, len: 3, rot: 1 },
     { t: 'crane', x: 27, z: 3 }, { t: 'crate', x: 33, z: 4 }, { t: 'crate', x: 25, z: 11 },
+    { t: 'tank', x: 28, z: 10 }, { t: 'tank', x: 32, z: 3 },
     { t: 'arc', x: 33, z: 7 }, { t: 'coolant', x: 26, z: 4 }, { t: 'medkit', x: 34, z: 11 },
     { t: 'pylon', x: 30, z: 9 },
 
@@ -202,6 +212,7 @@ export const HELIX_DEEP = {
     { t: 'mill', x: 34, z: 25 }, { t: 'silo', x: 44, z: 25 }, { t: 'mill', x: 34, z: 34 },
     { t: 'loader', x: 44, z: 35 }, { t: 'pylon', x: 36, z: 31 }, { t: 'pylon', x: 45, z: 31 },
     { t: 'arc', x: 35, z: 36 }, { t: 'medkit', x: 45, z: 27 }, { t: 'armour', x: 34, z: 30 },
+    { t: 'tank', x: 36, z: 25 }, { t: 'tank', x: 45, z: 36 }, { t: 'tank', x: 34, z: 33 },
     { t: 'crate', x: 46, z: 33 },
 
     // c_d / c_e — the dark walk
@@ -211,6 +222,7 @@ export const HELIX_DEEP = {
     // bay_c — pump cell, the dark fight
     { t: 'pump', x: 19, z: 48 }, { t: 'pump', x: 25, z: 48 },
     { t: 'medkit', x: 19, z: 54 }, { t: 'arc', x: 26, z: 48 }, { t: 'crate', x: 22, z: 54 },
+    { t: 'tank', x: 27, z: 51 },
 
     // bay_d — STORES. No queen, and it is where the supplies are. This is the
     // reward for exploring the branch rather than sprinting the critical path.
@@ -223,16 +235,17 @@ export const HELIX_DEEP = {
     { t: 'crate', x: 22, z: 58 }, { t: 'crate', x: 40, z: 58 },
 
     // bay_e — reactor floor
-    { t: 'pylon', x: 16, z: 61 }, { t: 'pylon', x: 44, z: 61 },
-    { t: 'pylon', x: 16, z: 68 }, { t: 'pylon', x: 44, z: 68 },
+    { t: 'pylon', x: 16, z: 61 }, { t: 'pylon', x: 41, z: 61 },
+    { t: 'pylon', x: 16, z: 68 }, { t: 'pylon', x: 41, z: 68 },
     { t: 'silo', x: 30, z: 61 }, { t: 'loader', x: 34, z: 67 },
-    { t: 'medkit', x: 15, z: 65 }, { t: 'medkit', x: 45, z: 65 },
+    { t: 'tank', x: 22, z: 61 }, { t: 'tank', x: 37, z: 61 }, { t: 'tank', x: 26, z: 67 },
+    { t: 'medkit', x: 15, z: 65 }, { t: 'medkit', x: 41, z: 65 },
     { t: 'armour', x: 29, z: 61 }, { t: 'coolant', x: 33, z: 62 }, { t: 'arc', x: 26, z: 68 },
-    { t: 'lift', x: 42, z: 65 },
+    { t: 'lift', x: 45, z: 64 },
   ],
 
   spawn: { x: 5.5, z: 6.5, facing: 0 },        // cells; facing +x, into the sector
-  exit:  { x: 41, z: 64, w: 3, h: 3 },
+  exit:  { x: 45, z: 64, w: 3, h: 2 },
 
   // --- PROGRESSION -------------------------------------------------------
   // The level is a chain of sections. Each one states its goal the moment the
@@ -264,10 +277,15 @@ export const HELIX_DEEP = {
       brief: 'STORES IS QUIET AND STOCKED. THE PUMP CELL IS NOT.' },
 
     { id: 's6', name: 'REACTOR FLOOR', rooms: ['c_g', 'c_h', 'bay_e'],
-      objective: 'PURGE THE REACTOR FLOOR — {n} REMAINING', clear: 'queens', next: 's7',
-      brief: 'FOUR NODES AND THE MATRIARCH.' },
+      objective: 'DESTROY THE BROOD NODES — {n} REMAINING', clear: 'queens',
+      wakes: ['q_e0'], next: 's6b',
+      brief: 'FOUR NODES. SOMETHING LARGER IS NOT MOVING YET.' },
 
-    { id: 's7', name: 'EXTRACTION', rooms: ['bay_e'],
+    { id: 's6b', name: 'THE MATRIARCH', rooms: ['bay_e'],
+      objective: 'KILL THE MATRIARCH', clear: 'queens', next: 's7',
+      brief: 'IT IS AWAKE.' },
+
+    { id: 's7', name: 'EXTRACTION', rooms: ['bay_e', 'c_lift'],
       objective: 'REACH THE LIFT', clear: 'exit' },
   ],
 

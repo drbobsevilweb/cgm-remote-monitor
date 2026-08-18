@@ -35,13 +35,13 @@ export const SHOTS = {
   OPENING:      { until: (h) => h.time > 1.2 },
   FIRST_COMBAT: { until: (h) => h.game.stats.kills >= 3 },
   GRATING:      { until: (h) => h.game.player.gratingDistance > 3 },
-  DARK_CORRIDOR:{ until: (h) => h.roomId() === 'coolant' && h.time > 4 },
+  DARK_CORRIDOR:{ until: (h) => h.roomId() === 'c_e' && h.time > 4 },
   SWARM:        { until: (h) => (h.game.enemies.aliveNow || 0) >= 12 },
   QUEEN:        { until: (h) => h.queenDist() < 13 && h.queenDist() > 5 },
   CLUTCH:       { until: (h) => h.game.broods.eggsAlive >= 5 && h.eggDist() < 9 },
   EXPLOSION:    { until: (h) => h.sinceExplosion >= 0 && h.sinceExplosion < 0.20 },
   ELITE:        { until: (h) => h.game.enemies.countOfKind(KIND.STALKER) > 0 && h.nearestEnemyDist() < 12 },
-  BOSS_REVEAL:  { until: (h) => h.roomId() === 'reactor' },
+  BOSS_REVEAL:  { until: (h) => h.roomId() === 'bay_e' },
 };
 
 export class Harness {
@@ -126,6 +126,13 @@ export class Harness {
   chooseGoal() {
     const g = this.game, p = g.player;
     if (this.forcedExit) return this.objectiveGoal();
+    // Sector purged: there is exactly one thing left to do, and a supply detour
+    // at this point is how a run ends up stalling twenty metres from the lift
+    // with every objective already met.
+    if (g.broods.remaining === 0) {
+      if (this.unreachable.size) { this.unreachable.clear(); this.goalCell = -1; }
+      return this.objectiveGoal();
+    }
 
     // A supply detour is a DETOUR. It has to be cheap, and it must never pull
     // the operator off a queen who is already in front of them — an earlier

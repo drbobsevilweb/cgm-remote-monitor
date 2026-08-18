@@ -113,6 +113,7 @@ export class Broods {
       convulsesDone: 0,
       clutchLost: 0,         // eggs culled recently, decays
       cullCooldown: 0,
+      dormant: !!spec.dormant,
       woken: false,
       hurt: 0,
       spawned: 0,
@@ -407,6 +408,9 @@ export class Broods {
       if (q.emitter) q.emitter.intensity = 18 + 34 * Math.pow(phase, 4) + q.hurt * 34;
 
       if (!this.active) continue;
+      // A dormant queen is inert: she does not stir, lay, or light the room.
+      // She is scenery until the level decides otherwise.
+      if (q.dormant) continue;
 
       const dist = Math.hypot(px - q.x, pz - q.z);
       // A queen wakes with her own part of the station. Two queens in one hall

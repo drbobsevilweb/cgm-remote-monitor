@@ -383,3 +383,58 @@ xenomorph silhouettes, acid-blood-through-decks, facehugger analogues, motion tr
 the famous ping, "colonial marine" iconography, corporate-conspiracy plotting, or any name,
 logo or prop from an existing property. The station is a *refinery*, not a colony. The
 operators are *contractors*, not marines. The threat *builds*, it does not merely breed.
+
+## 15. THE LEVEL IS A CHAIN
+
+One direction. Corridor, chamber, corridor, chamber, and the way back welds shut
+behind you.
+
+The previous sector was a ring with loops and alternates, authored on the
+principle that loops let the player retreat and let the Chorus flank. Both of
+those are true and neither was worth the cost: a player who does not know which
+way is forward is not being given freedom, they are being given homework. The
+Chorus still flanks — through vents, which is a better answer anyway because it
+comes from a direction the architecture told you about.
+
+Three rules:
+
+1. **Every section states its goal on entry.** Not a log line, not a hint — the
+   objective, in the corner, the moment you cross the threshold, and it counts
+   down as you work: *PURGE THE REACTOR FLOOR — 3 REMAINING*.
+2. **The way on opens when the goal is met, and the way back seals.** A sealed
+   door is a real state: it never cycles again, for anyone, in either direction.
+   The player never has to wonder whether the thing they want is behind them.
+3. **Difficulty is the number of live sources, not tougher individuals.** One,
+   then two, then four and the matriarch. Per-queen budgets *shrink* as the
+   count rises, so four sources is a busier room rather than four times the
+   pressure. The escalation is legible because it is countable.
+
+The single branch is the pump cell versus stores. Both rejoin at the same door.
+Stores has no queen and all the supplies; the pump cell is the fight and it is
+dark. Taking the quiet route is allowed to be the right answer, which is what
+makes it a choice rather than a detour.
+
+## 16. FIRE
+
+Fire is a **tool for softening a room, never a tool for clearing one.**
+
+- **It cannot kill.** Fire will not take anything below 30% of its health. It
+  injures up to 70%, in proportion to how long something stood in it, and the
+  last third has to be earned with the weapon.
+- **It is dangerous to the Chorus and a nuisance to the operator** — roughly
+  seven times the damage per second. Walking through a burning doorway must stay
+  an option; standing in one must not.
+- **It is small and sparse.** Two or three patches about a metre across, not a
+  carpet. A fire that fills the room is scenery and the player learns to ignore
+  it; a fire you step around is a hazard, and a hazard is only interesting if
+  there is floor beside it.
+
+That asymmetry is the whole design. Because fire can never finish anything, it
+can be generous without ever becoming the answer.
+
+**Shape.** Fire is cones, not billboards, and not circles. A flame is wide and
+bright at the base, narrow and unstable at the tip, and *the tip is the part that
+moves*. Each fire is a short stack of tapered cones whose tips wander on their
+own phase: the base stays put and the top licks. It also has to stay **orange** —
+pushed brighter it goes through the AgX shoulder and comes out white, at which
+point it stops reading as fire and starts reading as a light bulb.

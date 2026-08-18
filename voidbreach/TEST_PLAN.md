@@ -465,6 +465,64 @@ Two testing notes, recorded because both wasted time:
   expression and ignores the argument, so the frame-stepping loop was never
   called. The game was fine; the instrument had not run.
 
+## 6j. THE MAP REBUILD
+
+The sector was replaced with a linear chain (DIRECTION §15). That invalidates a
+lot of authored data at once, so it is worth recording what the gates caught
+rather than what was intended.
+
+**Caught by `level-check` before the game ever ran:** a queen placed inside a
+mill's 3×3 footprint, a second queen placed over the ore void, and a vent
+authored onto open floor. All three are the same class of error — authored
+coordinates that look right in a list and are wrong on the grid — and all three
+were free to find because connectivity and placement are validated statically.
+
+**Caught by the first full E3 run:**
+
+| Symptom | Cause |
+|---|---|
+| Every seed missed `trigger_explosive` | The rebuild dropped every pressure tank. Nothing in the sector could explode. |
+| Every seed died or stalled on the reactor floor | Four brooders **and** the matriarch live simultaneously — five sources at once, against a brief that says the first level must not be crowded. |
+
+The tanks were an omission and were simply put back. The reactor floor was a
+design error: it is now **two phases**. The matriarch is `dormant` — inert,
+unlit, not stirring, not laying — until the four brooders are dead, at which
+point the section clears, wakes her, and the objective changes from *DESTROY THE
+BROOD NODES — n REMAINING* to *KILL THE MATRIARCH*.
+
+That is a better fight than the flat version would have been even if it had been
+survivable, and it is what the sketch was asking for: clear the generators, then
+face the queen.
+
+## 6k. FIRE
+
+Verified directly rather than by inspection, because the rules are asymmetric
+and easy to get subtly wrong:
+
+| Case | Result |
+|---|---|
+| Creature standing in fire indefinitely | Burns to 38% and stops. **Never killed.** |
+| Brief exposure (0.5 s) | Loses 13 of 34 — proportional to exposure |
+| Operator standing in fire for 3 s | Loses 2.8 of 140 — about 2% |
+| Six blasts | 12 patches, radii 0.55–0.92 m, hard cap of 24 |
+
+The floor is 30% of max health, so fire injures **up to 70%** and the last third
+must be earned with the weapon. Because fire can never finish anything, it is
+free to be generous without becoming the answer.
+
+**And one rendering bug worth remembering.** The flames rendered perfectly and
+invisibly: fifteen cone instances, correct matrices, nothing on screen. Every
+geometry in this project comes from `MeshBuilder`, which always writes a vertex
+colour, so the shared emissive materials are all `vertexColors: true`. A stock
+`THREE.ConeGeometry` carries no colour attribute, `vColor` was undefined, and
+additive blending of an undefined colour is black. Giving the cone white
+vertices fixed it.
+
+Separately, the first colour pass pushed the flames bright enough to go through
+the AgX shoulder and come out white — **the third time in this project that an
+emissive has been made so bright it stopped carrying its own hue.** Egg cores,
+then the queen, now fire.
+
 ## 7. DEFINITION OF DONE (vertical slice)
 
 - V0, S1–S4, E1–E4, F1–F11 pass.

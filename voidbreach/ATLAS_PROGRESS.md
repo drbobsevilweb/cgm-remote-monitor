@@ -308,7 +308,31 @@ Anticipation window: **zero → 3.9 seconds** on an autopilot that walks straigh
 at threats, and 6.5 s for a player who does not. A new stat, `warningLead`, is
 carried in the run report so this cannot silently regress.
 
-## 9. A NOTE ON THE WORKING TITLE
+## 9. ITERATION 2 — LINEAR MAP, SECTIONS, MAP SCREEN, FIRE
+
+**The sector is now a chain**, rebuilt from a supplied sketch: arrival →
+corridor → Bay A (1 node) → corridor → Bay B (2 nodes) → corridor → [pump cell
+(1) ‖ stores (0, supplies)] → corridor → reactor floor (4 nodes, then the
+matriarch) → lift. The only branch rejoins at the same door. Sections seal
+behind the player, each states its goal on entry, and the goal counts down as
+they work.
+
+**Difficulty is the number of live sources**, not tougher individuals, and
+per-queen budgets shrink as the count rises. The reactor floor is deliberately
+two phases — the matriarch is inert until her four brooders are dead — because
+five simultaneous sources was measured and killed every seed.
+
+**A station plan on M**, filling in as rooms are entered, with one marker for
+the current objective and sealed doors drawn red.
+
+**Fire** exists for the first time: small cone flames with wandering tips, a
+nuisance to the operator and genuinely damaging to the Chorus, and incapable of
+killing anything — it stops at 30% of a target's health.
+
+Details, including everything the gates caught during the rebuild, are in
+TEST_PLAN §6j and §6k.
+
+## 10. A NOTE ON THE WORKING TITLE
 
 The prompt sets the title *A L I I E N S*, styles the two central "I" characters
 as an illuminated feature, and separately requires (§31, and the title section

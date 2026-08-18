@@ -50,9 +50,38 @@ three, and `?controls=keyboard|mouse|touch` forces one.
 | Dash | Space | Double click | Double tap |
 | Vent heat | R | R | R |
 | Light | F | F | F |
+| Station plan | M or Tab | M or Tab | — |
 
 Touch has no vent or light gesture yet. If you find yourself wanting either on
 the phone, that is a finding — say so and I will add them.
+
+---
+
+## The route
+
+The sector is a chain now, not a ring. Corridor, chamber, corridor, chamber, and
+the door behind you welds shut at two points on the way down — deliberately, so
+you never have to wonder whether the thing you want is back the way you came.
+
+| Section | Space | What it asks |
+|---|---|---|
+| s1 | Arrival deck, dock spine | Walk forward |
+| s2 | Cargo Bay A | One brood node |
+| s3 | Transfer corridors | Walk forward — *dock spine welds behind you* |
+| s4 | Ore Processing | Two nodes, and one is always behind you |
+| s5 | Coolant level | The pump cell has the node; **Stores 7-D has the supplies and no node** — the quiet route is allowed to be the right answer |
+| s6 | Reactor floor | Four nodes, and something larger that is not moving yet |
+| s6b | The matriarch | She wakes when the floor is purged |
+| s7 | Extraction | The lift, which does not unlock until she is dead |
+
+Each section states its goal in the corner the moment you cross into it, and the
+node count ticks down as you work. **Press M** for the station plan: rooms you
+have not entered are outlines only, sealed doors are red, the current objective
+pulses, and the arrow is you.
+
+The question I have about all of this: **is it ever unclear where forward is?**
+That is the entire point of the rebuild, so a single moment of "which way now"
+is worth reporting.
 
 ---
 
@@ -98,6 +127,13 @@ Does that read as dread, or as a pause where nothing happens?
   being told? I know this reads poorly in a still frame.
 - **The dark.** Is it atmospheric or is it just hard to see? I know the bays are
   still flatter than intended.
+- **Fire.** It cannot kill anything — it stops at 30% of a target's health — and
+  it hurts the Chorus about seven times as fast as it hurts you. So walking
+  through a burning doorway should feel fine and standing in one should not.
+  Does it read that way, or does it just look like you are taking damage for no
+  reason? The shape is cones with wandering tips rather than the old billboards;
+  the previous version carpeted the room and I would rather it be sparse enough
+  to step around.
 
 ---
 
@@ -107,7 +143,9 @@ Does that read as dread, or as a pause where nothing happens?
   and it is structural, not a brightness slider.
 - The queen's hood — the entire tell for her frontal armour — is hard to read
   from the 62° camera. Modelling problem.
-- There is no boss. The sector ends at a lift.
+- There is no boss. The matriarch on the reactor floor is a larger queen with a
+  bigger clutch, not a designed encounter, and the sector ends at a lift.
+- Touch has no gesture for the station plan, so on a phone you cannot open it.
 - There may be a brief hitch the first time something new appears on screen:
   about fifteen shader programs still compile after the prewarm.
 - Touch has no on-screen buttons at all. Deliberate for now, possibly wrong.

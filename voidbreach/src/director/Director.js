@@ -86,7 +86,9 @@ export class Director {
   /** Queens belonging to this section's rooms, alive or not. */
   sectionQueens(sec) {
     const rooms = new Set(sec.rooms);
-    return this.broods.list.filter((q) => rooms.has(q.spec.room));
+    // Dormant queens belong to a later section by definition — counting them
+    // here would mean a section that can never clear.
+    return this.broods.list.filter((q) => rooms.has(q.spec.room) && !q.dormant);
   }
 
   sectionQueensLeft(sec) {
@@ -98,6 +100,11 @@ export class Director {
     if (!sec || this.sectionCleared) return;
     this.sectionCleared = true;
     for (const id of sec.opens || []) this.sector.unlock(id);
+    // Anything this section was keeping asleep now wakes up.
+    for (const qid of sec.wakes || []) {
+      const q = this.broods.list.find((x) => x.id === qid);
+      if (q) { q.dormant = false; this.events.emit('queenRoused', { id: q.id, x: q.x, z: q.z }); }
+    }
     // Doors may also name the section rather than be named by it.
     for (const d of this.sector.doors) {
       if (d.unlockOn === 'section:' + sec.id) this.sector.unlock(d.id);
